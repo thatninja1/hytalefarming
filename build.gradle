@@ -1,0 +1,83 @@
+plugins {
+    id 'java'
+    id 'com.gradleup.shadow' version '9.3.1'
+}
+
+group = 'com.ninja.tags'
+version = '1.0.0'
+
+def targetJavaVersion = 25
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(targetJavaVersion)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+configurations.configureEach {
+    // Prevent shading SLF4J API/bindings into the plugin jar.
+    exclude group: 'org.slf4j'
+    exclude group: 'ch.qos.logback'
+}
+
+dependencies {
+    compileOnly(files("libs/HytaleServer.jar"))
+    compileOnly 'net.luckperms:api:5.4'
+
+    implementation('org.xerial:sqlite-jdbc:3.46.0.0') {
+        exclude group: 'org.slf4j'
+    }
+    implementation 'com.google.code.gson:gson:2.11.0'
+    implementation 'org.yaml:snakeyaml:2.2'
+}
+
+shadowJar {
+    archiveBaseName.set("ninjatags")
+    archiveClassifier.set('')
+    relocate 'com.google.gson', 'com.ninja.tags.shaded.gson'
+    relocate 'org.yaml.snakeyaml', 'com.ninja.tags.shaded.snakeyaml'
+    mergeServiceFiles()
+    dependencies {
+        exclude(dependency('org.slf4j:.*:.*'))
+        exclude(dependency('ch.qos.logback:.*:.*'))
+    }
+}
+
+jar {
+    archiveBaseName.set("ninjatags")
+    archiveClassifier.set('plain')
+}
+
+tasks.register("verifyHytaleServerJar") {
+    doLast {
+        def jar = file("libs/HytaleServer.jar")
+        if (!jar.exists()) {
+            throw new GradleException("Missing libs/HytaleServer.jar. Place the HytaleServer.jar in the libs/ folder before building.")
+        }
+    }
+}
+
+tasks.named("compileJava") {
+    dependsOn("verifyHytaleServerJar")
+}
+
+tasks.register("copyPluginJar", Copy) {
+    dependsOn("shadowJar")
+    from(layout.buildDirectory.dir("libs")) {
+        include("ninjatags-${version}.jar")
+    }
+    into(layout.projectDirectory.dir("dist"))
+}
+
+tasks.named("assemble") {
+    dependsOn("shadowJar")
+}
+
+tasks.named("build") {
+    dependsOn("shadowJar")
+    dependsOn("copyPluginJar")
+}
