@@ -13,6 +13,7 @@ public class TokensConfig {
 
     private String currencyName = "Tokens";
     private int tokensTimes = 1;
+    private boolean debug = true;
 
     public static TokensConfig load(Path path) {
         try {
@@ -35,5 +36,9 @@ public class TokensConfig {
 
     public int getTokensTimes() {
         return Math.max(1, tokensTimes);
+    }
+
+    public boolean isDebug() {
+        return debug;
     }
 }

@@ -1,22 +1,75 @@
 package dev.hytalemodding.hytalefarming.events;
 
-import dev.hytalemodding.hytalefarming.service.TokenService;
+import com.hypixel.hytale.component.Archetype;
+import com.hypixel.hytale.component.ArchetypeChunk;
+import com.hypixel.hytale.component.CommandBuffer;
+import com.hypixel.hytale.component.Ref;
+import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.component.query.Query;
+import com.hypixel.hytale.component.system.EntityEventSystem;
+import com.hypixel.hytale.server.core.Message;
+import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.event.events.ecs.BreakBlockEvent;
+import com.hypixel.hytale.server.core.inventory.ItemStack;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import dev.hytalemodding.hytalefarming.Debug;
+import dev.hytalemodding.hytalefarming.HytaleFarmingPlugin;
 
-import java.util.UUID;
+import javax.annotation.Nonnull;
 
-/**
- * SDK-independent logic adapter for crop break events.
- */
-public class TokenFinderBreakBlockSystem {
-    private final TokenService tokenService;
+public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, BreakBlockEvent> {
 
-    public TokenFinderBreakBlockSystem(TokenService tokenService) {
-        this.tokenService = tokenService;
+    private final HytaleFarmingPlugin plugin;
+
+    public TokenFinderBreakBlockSystem(HytaleFarmingPlugin plugin) {
+        super(BreakBlockEvent.class);
+        this.plugin = plugin;
     }
 
-    public long onCropBreak(UUID playerId, String playerName, String heldItemId, String blockId) {
-        if (!"Tool_Hoe_Thorium".equals(heldItemId)) return 0;
-        if (!(blockId.startsWith("Crop_") || blockId.startsWith("Plant_Crop_"))) return 0;
-        return tokenService.processTokenFinderCropBreak(playerId, playerName);
+    @Override
+    public void handle(int index,
+                       @Nonnull ArchetypeChunk<EntityStore> chunk,
+                       @Nonnull Store<EntityStore> store,
+                       @Nonnull CommandBuffer<EntityStore> commandBuffer,
+                       @Nonnull BreakBlockEvent event) {
+        Ref<EntityStore> ref = chunk.getReferenceTo(index);
+        Player player = store.getComponent(ref, Player.getComponentType());
+        if (player == null) {
+            return;
+        }
+
+        ItemStack inHand = event.getItemInHand();
+        String itemId = inHand == null ? "<none>" : inHand.getItemId();
+        String blockId = event.getBlockType() == null ? "<unknown>" : event.getBlockType().getId();
+
+        PlayerRef playerRef = store.getComponent(ref, PlayerRef.getComponentType());
+        if (playerRef == null) {
+            return;
+        }
+
+        int level = plugin.getTokenService().enchantLevel(playerRef.getUuid(), playerRef.getUsername(), "token_finder");
+        Debug.log("BreakBlockEvent player=" + player.getDisplayName()
+                + " item=" + itemId + " block=" + blockId + " tokenFinderLevel=" + level);
+
+        if (!"Tool_Hoe_Thorium".equals(itemId)) {
+            return;
+        }
+        if (!(blockId.startsWith("Crop_") || blockId.startsWith("Plant_Crop_"))) {
+            return;
+        }
+
+        long awarded = plugin.getTokenService().processTokenFinderCropBreak(playerRef.getUuid(), playerRef.getUsername());
+        if (awarded > 0) {
+            int max = plugin.getEnchantsConfig().getTokenFinder().getMaxLevel();
+            double chance = Math.min(1D, (double) level / (double) max);
+            Debug.log("TokenFinder proc success player=" + player.getDisplayName() + " chance=" + chance + " awarded=" + awarded);
+            player.sendMessage(Message.raw("+" + awarded + " " + plugin.getTokensConfig().getCurrencyName() + " (Token Finder)"));
+        }
+    }
+
+    @Override
+    public Query<EntityStore> getQuery() {
+        return Archetype.of(Player.getComponentType());
     }
 }

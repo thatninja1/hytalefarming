@@ -1,9 +1,13 @@
 package dev.hytalemodding.hytalefarming.commands;
 
-/**
- * Placeholder command group for SDK adapters.
- * The actual handlers are TokensBalanceCommand/TokensPayCommand.
- */
-public final class TokensCommandCollection {
-    private TokensCommandCollection() {}
+import com.hypixel.hytale.server.core.command.system.basecommands.AbstractCommandCollection;
+import dev.hytalemodding.hytalefarming.HytaleFarmingPlugin;
+
+public class TokensCommandCollection extends AbstractCommandCollection {
+
+    public TokensCommandCollection(HytaleFarmingPlugin plugin) {
+        super("tokens", "Token currency commands");
+        addSubCommand(new TokensBalanceCommand(plugin));
+        addSubCommand(new TokensPayCommand(plugin));
+    }
 }
