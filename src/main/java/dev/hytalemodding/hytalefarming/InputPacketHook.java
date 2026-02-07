@@ -28,10 +28,7 @@ public class InputPacketHook {
 
     public void register() {
         this.syncWatcher = PacketAdapters.registerInbound((PlayerRef playerRef, Packet packet) -> {
-            if (!(packet instanceof SyncInteractionChains chains)) {
-                return;
-            }
-            if (chains.updates == null) {
+            if (!(packet instanceof SyncInteractionChains chains) || chains.updates == null) {
                 return;
             }
 
@@ -47,22 +44,19 @@ public class InputPacketHook {
                     continue;
                 }
 
-                String packetItemId = update.itemInHandId == null ? "<null>" : update.itemInHandId;
-                String serverItemId = plugin.resolveHeldItemId(playerRef);
-                String itemId = "<none>".equals(serverItemId) ? packetItemId : serverItemId;
-                boolean match = "Tool_Hoe_Thorium".equals(itemId);
-
-                Debug.log("[HoeDebug] heldItemId=" + itemId + " packetItemId=" + packetItemId + " serverItemId=" + serverItemId + " match=" + match);
+                String heldItemId = update.itemInHandId == null ? "<null>" : update.itemInHandId;
+                boolean match = "Tool_Hoe_Thorium".equals(heldItemId);
+                Debug.log("[HoeDebug] heldItemId=" + heldItemId + " match=" + match);
 
                 if (match) {
-                    plugin.openUpgradeUiFromPacket(playerRef, type.name());
+                    plugin.openUpgradeUiSafe(playerRef, null, type.name(), heldItemId);
                 }
             }
         });
 
-        this.counterWatcher = PacketAdapters.registerInbound((PlayerRef playerRef, Packet packet) -> {
-            packetCounts.merge(playerRef.getUuid(), 1, Integer::sum);
-        });
+        this.counterWatcher = PacketAdapters.registerInbound((PlayerRef playerRef, Packet packet) ->
+                packetCounts.merge(playerRef.getUuid(), 1, Integer::sum)
+        );
 
         this.counterPrinter = Executors.newSingleThreadScheduledExecutor();
         this.counterPrinter.scheduleAtFixedRate(() -> {

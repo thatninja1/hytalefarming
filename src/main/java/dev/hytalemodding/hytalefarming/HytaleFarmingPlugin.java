@@ -8,6 +8,7 @@ import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Int
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.hytalemodding.hytalefarming.commands.TokenTopCommand;
 import dev.hytalemodding.hytalefarming.commands.TokensCommandCollection;
@@ -87,41 +88,77 @@ public class HytaleFarmingPlugin extends JavaPlugin {
         getLogger().atInfo().log("HytaleFarming plugin shutdown.");
     }
 
-    public String resolveHeldItemId(PlayerRef playerRef) {
+    public void openUpgradeUiSafe(PlayerRef playerRef, World world, String interactionType, String heldItemId) {
         try {
-            Player player = playerRef.getComponent(Player.getComponentType());
-            if (player == null || player.getInventory() == null || player.getInventory().getItemInHand() == null) {
-                return "<none>";
+            Ref<EntityStore> ref = playerRef.getReference();
+            if (ref == null || !ref.isValid()) {
+                Debug.log("[HoeDebug] openUpgradeUiSafe aborted: invalid player ref for " + playerRef.getUsername());
+                return;
             }
-            return player.getInventory().getItemInHand().getItemId();
+
+            World targetWorld = world;
+            if (targetWorld == null) {
+                Store<EntityStore> store = ref.getStore();
+                EntityStore entityStore = store.getExternalData();
+                targetWorld = entityStore.getWorld();
+            }
+
+            String currentThread = Thread.currentThread().getName();
+            Debug.log("[HoeDebug] openUpgradeUiSafe called on thread=" + currentThread
+                    + " targetWorld=" + targetWorld.getName()
+                    + " worldThreadActive=" + targetWorld.isInThread());
+
+            Runnable openTask = () -> openUpgradeUiInternal(playerRef, interactionType, heldItemId);
+            if (targetWorld.isInThread()) {
+                openTask.run();
+            } else {
+                targetWorld.execute(openTask);
+                Debug.log("[HoeDebug] scheduled UI open to WorldThread=" + targetWorld.getName());
+            }
         } catch (Exception ex) {
-            Debug.log("[HoeDebug] failed resolving held item from server state: " + ex.getMessage());
-            return "<none>";
+            Debug.log("[HoeDebug] openUpgradeUiSafe failed before scheduling: " + ex.getMessage());
         }
     }
 
-    public void openUpgradeUiFromPacket(PlayerRef playerRef, String interactionType) {
-        Ref<EntityStore> ref = playerRef.getReference();
-        if (ref == null || !ref.isValid()) {
-            Debug.log("[HoeDebug] Cannot open UI; invalid player ref for " + playerRef.getUsername());
-            return;
-        }
-
-        Store<EntityStore> store = ref.getStore();
-        Player player = playerRef.getComponent(Player.getComponentType());
-        if (player == null) {
-            Debug.log("[HoeDebug] Cannot open UI; Player component null for " + playerRef.getUsername());
-            return;
-        }
-
-        Debug.log("[HoeDebug] Detected " + interactionType + " right-click with Tool_Hoe_Thorium for player=" + playerRef.getUsername());
-        player.sendMessage(Message.raw("[HoeDebug] Thorium hoe detected -> opening UI"));
+    private void openUpgradeUiInternal(PlayerRef playerRef, String interactionType, String heldItemId) {
+        String threadName = Thread.currentThread().getName();
+        Debug.log("[HoeDebug] openUpgradeUiInternal on thread=" + threadName + " interactionType=" + interactionType + " heldItemId=" + heldItemId);
 
         try {
+            Ref<EntityStore> ref = playerRef.getReference();
+            if (ref == null || !ref.isValid()) {
+                Debug.log("[HoeDebug] Cannot open UI; invalid player ref in internal for " + playerRef.getUsername());
+                return;
+            }
+
+            Store<EntityStore> store = ref.getStore();
+            Player player = store.getComponent(ref, Player.getComponentType());
+            if (player == null) {
+                Debug.log("[HoeDebug] Cannot open UI; Player component null for " + playerRef.getUsername());
+                return;
+            }
+
+            long tokenBalance = tokenService.balance(playerRef.getUuid(), playerRef.getUsername());
+            int tokenFinderLevel = tokenService.enchantLevel(playerRef.getUuid(), playerRef.getUsername(), "token_finder");
+            Debug.log("[HoeDebug] tokenBalance=" + tokenBalance + " tokenFinderLevel=" + tokenFinderLevel);
+
+            player.sendMessage(Message.raw("[HoeDebug] Thorium hoe detected -> opening UI"));
             player.getPageManager().openCustomPage(ref, store, new ThoriumHoeUpgradePage(playerRef));
             Debug.log("[HoeDebug] UI open invoked successfully for player=" + playerRef.getUsername());
         } catch (Exception ex) {
             Debug.log("[HoeDebug] UI open failed for player=" + playerRef.getUsername() + " reason=" + ex.getMessage());
+            try {
+                Ref<EntityStore> ref = playerRef.getReference();
+                if (ref != null && ref.isValid()) {
+                    Store<EntityStore> store = ref.getStore();
+                    Player player = store.getComponent(ref, Player.getComponentType());
+                    if (player != null) {
+                        player.sendMessage(Message.raw("[HytaleFarming] UI missing or failed to open"));
+                    }
+                }
+            } catch (Exception ignored) {
+                Debug.log("[HoeDebug] failed to notify player about UI failure: " + ignored.getMessage());
+            }
         }
     }
 
