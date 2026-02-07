@@ -19,7 +19,12 @@ Group #Root {
 
     Button #TokenFinderButton {
       Anchor: (Top: 28, Width: 360, Height: 52);
-      Text: "Token Finder (Upgrade)";
+
+      Label #TokenFinderButtonLabel {
+        Anchor: (Width: 340, Height: 36);
+        Text: "Token Finder (Upgrade)";
+        Style: (FontSize: 20, Alignment: Center);
+      }
     }
   }
 }
