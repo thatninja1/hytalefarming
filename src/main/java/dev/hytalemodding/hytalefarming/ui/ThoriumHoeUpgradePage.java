@@ -31,12 +31,22 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
                       @Nonnull Store<EntityStore> store) {
         Player player = store.getComponent(ref, Player.getComponentType());
 
-        String expectedJarPath = "resources/Common/UI/Custom/ThoriumHoeUpgrade.ui";
+        String expectedJarPath = "Common/UI/Custom/ThoriumHoeUpgrade.ui";
+        boolean hasResourceStreamUi = getClass().getResourceAsStream("/" + expectedJarPath) != null;
         boolean hasClasspathUi = getClass().getClassLoader().getResource(expectedJarPath) != null;
         Debug.log("[HoeDebug] UI build start: docPrimary=" + PRIMARY_DOCUMENT_ID
                 + " docLegacy=" + LEGACY_DOCUMENT_ID
                 + " expectedJarPath=" + expectedJarPath
+                + " resourceStreamExists=" + hasResourceStreamUi
                 + " classpathExists=" + hasClasspathUi);
+
+        if (!hasResourceStreamUi) {
+            Debug.log("[HoeDebug] UI asset missing at /" + expectedJarPath + "; skipping append to avoid client crash");
+            if (player != null) {
+                player.sendMessage(Message.raw("[HytaleFarming] UI asset missing (/Common/UI/Custom/ThoriumHoeUpgrade.ui)."));
+            }
+            return;
+        }
 
         boolean sent = false;
         try {

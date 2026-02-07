@@ -69,9 +69,9 @@ public class HytaleFarmingPlugin extends JavaPlugin {
 
 
         boolean uiAssetStreamPresent = getClass().getResourceAsStream("/Common/UI/Custom/ThoriumHoeUpgrade.ui") != null;
-        boolean uiAssetClasspathPresent = getClass().getClassLoader().getResource("resources/Common/UI/Custom/ThoriumHoeUpgrade.ui") != null;
+        boolean uiAssetClasspathPresent = getClass().getClassLoader().getResource("Common/UI/Custom/ThoriumHoeUpgrade.ui") != null;
         Debug.log("[HoeDebug] startup UI asset check resourceStream(/Common/UI/Custom/ThoriumHoeUpgrade.ui)="
-                + uiAssetStreamPresent + " classLoader(resources/Common/UI/Custom/ThoriumHoeUpgrade.ui)=" + uiAssetClasspathPresent);
+                + uiAssetStreamPresent + " classLoader(Common/UI/Custom/ThoriumHoeUpgrade.ui)=" + uiAssetClasspathPresent);
 
         this.inputPacketHook = new InputPacketHook(this);
         this.inputPacketHook.register();
