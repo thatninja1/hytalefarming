@@ -1,6 +1,6 @@
 # hytalefarming
 
-Hytale plugin/mod `v1.0.0` that turns `Tool_Hoe_Thorium` into an upgradeable hoe.
+Hytale plugin/mod `v1.0.1` that turns `Tool_Hoe_Thorium` into an upgradeable hoe.
 
 ## Included
 - Upgrade UI opens on right-click of `Tool_Hoe_Thorium`.
@@ -17,3 +17,5 @@ Hytale plugin/mod `v1.0.0` that turns `Tool_Hoe_Thorium` into an upgradeable hoe
 ## Notes
 - This repo intentionally avoids committing binary wrapper artifacts to prevent PR tooling failures on binary files.
 - Build uses plain Gradle + Hytale Maven dependency declarations.
+
+- If your server setup does not automatically distribute asset packs, clients must also install the matching mod/assets version (v1.0.1) to avoid missing custom UI documents.

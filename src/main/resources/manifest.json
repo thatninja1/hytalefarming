@@ -1,7 +1,7 @@
 {
   "Group": "HytaleFarming",
   "Name": "ThoriumUpgradeableHoe",
-  "Version": "1.0.0",
+  "Version": "1.0.1",
   "Description": "Upgradeable thorium hoe with token currency and Token Finder enchant",
   "Authors": [
     {

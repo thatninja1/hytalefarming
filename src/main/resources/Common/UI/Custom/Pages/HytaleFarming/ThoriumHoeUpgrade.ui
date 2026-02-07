@@ -2,7 +2,7 @@ Group #Root {
   LayoutMode: Center;
 
   Group #UpgradePanel {
-    Anchor: (Width: 640, Height: 380);
+    Anchor: (Width: 640, Height: 420);
     LayoutMode: Top;
 
     Label #TitleLabel {
@@ -24,6 +24,16 @@ Group #Root {
         Anchor: (Width: 340, Height: 36);
         Text: "Token Finder (Upgrade)";
         Style: (FontSize: 20, Alignment: Center);
+      }
+    }
+
+    Button #CloseButton {
+      Anchor: (Top: 16, Width: 180, Height: 44);
+
+      Label #CloseButtonLabel {
+        Anchor: (Width: 160, Height: 32);
+        Text: "Close";
+        Style: (FontSize: 18, Alignment: Center);
       }
     }
   }
