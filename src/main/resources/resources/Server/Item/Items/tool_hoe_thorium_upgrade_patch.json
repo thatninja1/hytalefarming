@@ -1,0 +1,12 @@
+{
+  "Id": "Tool_Hoe_Thorium",
+  "Interactions": {
+    "Secondary": {
+      "Interactions": [
+        {
+          "Type": "thorium_hoe_upgrade_menu"
+        }
+      ]
+    }
+  }
+}
