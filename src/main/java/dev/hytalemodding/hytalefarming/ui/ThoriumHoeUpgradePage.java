@@ -2,6 +2,7 @@ package dev.hytalemodding.hytalefarming.ui;
 
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.protocol.packets.interface_.CustomUICommand;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.entity.entities.player.pages.CustomUIPage;
@@ -18,7 +19,6 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
 
     private static final String PRIMARY_DOCUMENT_ID = "Custom/ThoriumHoeUpgrade.ui";
     private static final String LEGACY_DOCUMENT_ID = "ThoriumHoeUpgrade.ui";
-    private static final String APPEND_SELECTOR = "#Root";
 
     public ThoriumHoeUpgradePage(PlayerRef playerRef) {
         super(playerRef, CustomPageLifetime.CanDismiss);
@@ -35,30 +35,67 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
         boolean hasClasspathUi = getClass().getClassLoader().getResource(expectedJarPath) != null;
         Debug.log("[HoeDebug] UI build start: docPrimary=" + PRIMARY_DOCUMENT_ID
                 + " docLegacy=" + LEGACY_DOCUMENT_ID
-                + " selector=" + APPEND_SELECTOR
                 + " expectedJarPath=" + expectedJarPath
                 + " classpathExists=" + hasClasspathUi);
 
+        boolean sent = false;
         try {
-            uiCommandBuilder.append(PRIMARY_DOCUMENT_ID, APPEND_SELECTOR);
-            Debug.log("[HoeDebug] UI command sent to client via append(doc,selector) doc="
-                    + PRIMARY_DOCUMENT_ID + " selector=" + APPEND_SELECTOR);
+            uiCommandBuilder.append(PRIMARY_DOCUMENT_ID);
+            Debug.log("[HoeDebug] UI command builder used append(docOnly) doc=" + PRIMARY_DOCUMENT_ID);
+            sent = true;
         } catch (Exception primaryEx) {
-            Debug.log("[HoeDebug] primary UI append failed: " + primaryEx.getMessage());
+            Debug.log("[HoeDebug] primary append(docOnly) failed: " + primaryEx.getMessage());
+        }
+
+        if (!sent) {
             try {
-                uiCommandBuilder.append(LEGACY_DOCUMENT_ID, APPEND_SELECTOR);
-                Debug.log("[HoeDebug] UI fallback command sent doc=" + LEGACY_DOCUMENT_ID + " selector=" + APPEND_SELECTOR);
+                uiCommandBuilder.append(LEGACY_DOCUMENT_ID);
+                Debug.log("[HoeDebug] UI fallback builder used append(docOnly) doc=" + LEGACY_DOCUMENT_ID);
+                sent = true;
             } catch (Exception fallbackEx) {
-                Debug.log("[HoeDebug] fallback UI append failed: " + fallbackEx.getMessage());
-                if (player != null) {
-                    player.sendMessage(Message.raw("[HytaleFarming] UI failed to open; missing ThoriumHoeUpgrade.ui"));
-                }
+                Debug.log("[HoeDebug] fallback append(docOnly) failed: " + fallbackEx.getMessage());
+            }
+        }
+
+        logBuiltCommands(uiCommandBuilder);
+
+        if (!sent) {
+            if (player != null) {
+                player.sendMessage(Message.raw("[HytaleFarming] UI missing or failed to open"));
+            }
+            try {
                 uiCommandBuilder.appendInline(
-                        "Group #ThoriumHoeFallback { LayoutMode: Center; Label { Text: \"Thorium Hoe Upgrades\"; Anchor: (Width: 400, Height: 40); } }",
-                        APPEND_SELECTOR
+                        "Group #Root { LayoutMode: Center; Label { Text: \"Thorium Hoe Upgrades\"; Anchor: (Width: 420, Height: 42); } }",
+                        "#Root"
                 );
                 Debug.log("[HoeDebug] inline fallback UI command sent");
+                logBuiltCommands(uiCommandBuilder);
+            } catch (Exception inlineEx) {
+                Debug.log("[HoeDebug] inline fallback failed: " + inlineEx.getMessage());
             }
+        }
+    }
+
+    private void logBuiltCommands(UICommandBuilder uiCommandBuilder) {
+        try {
+            CustomUICommand[] commands = uiCommandBuilder.getCommands();
+            if (commands == null) {
+                Debug.log("[HoeDebug] UI commands: <null>");
+                return;
+            }
+            for (int i = 0; i < commands.length; i++) {
+                CustomUICommand cmd = commands[i];
+                if (cmd == null) {
+                    Debug.log("[HoeDebug] UI cmd[" + i + "] = <null>");
+                    continue;
+                }
+                Debug.log("[HoeDebug] UI cmd[" + i + "] type=" + cmd.type
+                        + " selector=" + cmd.selector
+                        + " data=" + cmd.data
+                        + " text=" + cmd.text);
+            }
+        } catch (Exception ex) {
+            Debug.log("[HoeDebug] failed to dump UI commands: " + ex.getMessage());
         }
     }
 }
