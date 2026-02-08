@@ -144,15 +144,21 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
         int maxLevel = tokenFinderCfg.getMaxLevel();
         int cost = tokenFinderCfg.getUpgradeCost(level);
 
+        uiCommandBuilder.set("#SubtitleLabel.Text", "Upgrade your Thorium Hoe");
         uiCommandBuilder.set("#TokenBalanceLabel.Text", "Tokens: " + balance);
         uiCommandBuilder.set("#TokenFinderLevelLabel.Text", "Level: " + level + " / " + maxLevel);
         uiCommandBuilder.set("#TokenFinderCostLabel.Text", level >= maxLevel ? "Cost: MAX" : "Cost: " + cost + " Tokens");
+        uiCommandBuilder.set("#TokenFinderUpgradeButtonLabel.Text", level >= maxLevel ? "MAX" : "Upgrade");
 
         uiEventBuilder.addEventBinding(CustomUIEventBindingType.Activating, "#CloseButton", EventData.of(ACTION_KEY, ACTION_CLOSE));
         Debug.log("[HoeDebug] bound UI event Activating -> #CloseButton");
 
-        uiEventBuilder.addEventBinding(CustomUIEventBindingType.Activating, "#TokenFinderUpgradeButton", EventData.of(ACTION_KEY, ACTION_UPGRADE_TOKEN_FINDER));
-        Debug.log("[HoeDebug] bound UI event Activating -> #TokenFinderUpgradeButton");
+        if (level < maxLevel) {
+            uiEventBuilder.addEventBinding(CustomUIEventBindingType.Activating, "#TokenFinderUpgradeButton", EventData.of(ACTION_KEY, ACTION_UPGRADE_TOKEN_FINDER));
+            Debug.log("[HoeDebug] bound UI event Activating -> #TokenFinderUpgradeButton");
+        } else {
+            Debug.log("[HoeDebug] token finder at MAX; no upgrade binding added");
+        }
     }
 
     private void refreshUi() {

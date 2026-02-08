@@ -1,115 +1,103 @@
 Group #Root {
-  LayoutMode: Center;
+  LayoutMode: Top;
 
-  Group #Backdrop {
-    Anchor: (Width: 1920, Height: 1080);
-    Style: (BackgroundColor: #0A1424DD);
+  Label #TitleLabel {
+    Anchor: (Top: 24, Left: 30, Width: 1200, Height: 52);
+    Text: "Ninja Farming";
+    Style: (FontSize: 42, Alignment: Center);
+  }
 
-    Group #MainPanel {
-      Anchor: (Top: 48, Left: 80, Width: 1700, Height: 460);
+  Label #SubtitleLabel {
+    Anchor: (Top: 4, Left: 30, Width: 1200, Height: 30);
+    Text: "Upgrade your Thorium Hoe";
+    Style: (FontSize: 20, Alignment: Center);
+  }
+
+  Label #TokenBalanceLabel {
+    Anchor: (Top: 8, Left: 30, Width: 1200, Height: 30);
+    Text: "Tokens: 0";
+    Style: (FontSize: 22, Alignment: Center);
+  }
+
+  Group #UpgradeRow {
+    Anchor: (Top: 18, Left: 30, Width: 1200, Height: 240);
+    LayoutMode: Left;
+
+    Group #TokenFinderTile {
+      Anchor: (Width: 220, Height: 220);
       LayoutMode: Top;
-      Style: (BackgroundColor: #0F1C2CD9);
 
-      Label #TitleLabel {
-        Anchor: (Top: 20, Left: 40, Width: 1620, Height: 52);
-        Text: "Ninja Farming";
-        Style: (FontSize: 42, Alignment: Center, Color: #F1F5F9);
+      Label #TokenFinderTitle {
+        Anchor: (Top: 8, Width: 210, Height: 28);
+        Text: "Token Finder";
+        Style: (FontSize: 20, Alignment: Center);
       }
 
-      Label #TokenBalanceLabel {
-        Anchor: (Top: 6, Left: 40, Width: 1620, Height: 34);
-        Text: "Tokens: 0";
-        Style: (FontSize: 24, Alignment: Center, Color: #CBD5E1);
+      Label #TokenFinderLevelLabel {
+        Anchor: (Top: 4, Width: 210, Height: 24);
+        Text: "Level: 0 / 10";
+        Style: (FontSize: 16, Alignment: Center);
       }
 
-      Group #UpgradeRow {
-        Anchor: (Top: 34, Left: 40, Width: 1620, Height: 300);
-        LayoutMode: Left;
-
-        Group #TokenFinderCard {
-          Anchor: (Width: 300, Height: 280);
-          LayoutMode: Top;
-          Style: (BackgroundColor: #16273BEE, BorderColor: #3B82F6, BorderWidth: 1);
-
-          Label #TokenFinderTitle {
-            Anchor: (Top: 16, Width: 280, Height: 32);
-            Text: "Token Finder";
-            Style: (FontSize: 24, Alignment: Center, Color: #E2E8F0);
-          }
-
-          Label #TokenFinderLevelLabel {
-            Anchor: (Top: 10, Width: 280, Height: 28);
-            Text: "Level: 0 / 10";
-            Style: (FontSize: 18, Alignment: Center, Color: #93C5FD);
-          }
-
-          Label #TokenFinderCostLabel {
-            Anchor: (Top: 8, Width: 280, Height: 28);
-            Text: "Cost: 10 Tokens";
-            Style: (FontSize: 18, Alignment: Center, Color: #BFDBFE);
-          }
-
-          Button #TokenFinderUpgradeButton {
-            Anchor: (Top: 14, Width: 220, Height: 46);
-
-            Label #TokenFinderUpgradeButtonLabel {
-              Anchor: (Width: 200, Height: 30);
-              Text: "UPGRADE";
-              Style: (FontSize: 18, Alignment: Center, Color: #0F172A);
-            }
-          }
-        }
-
-        Group #ComingSoonCard1 {
-          Anchor: (Left: 20, Width: 300, Height: 280);
-          Style: (BackgroundColor: #111827CC, BorderColor: #334155, BorderWidth: 1);
-          Label #ComingSoonLabel1 {
-            Anchor: (Top: 120, Width: 280, Height: 32);
-            Text: "Coming Soon";
-            Style: (FontSize: 20, Alignment: Center, Color: #94A3B8);
-          }
-        }
-
-        Group #ComingSoonCard2 {
-          Anchor: (Left: 20, Width: 300, Height: 280);
-          Style: (BackgroundColor: #111827CC, BorderColor: #334155, BorderWidth: 1);
-          Label #ComingSoonLabel2 {
-            Anchor: (Top: 120, Width: 280, Height: 32);
-            Text: "Coming Soon";
-            Style: (FontSize: 20, Alignment: Center, Color: #94A3B8);
-          }
-        }
-
-        Group #ComingSoonCard3 {
-          Anchor: (Left: 20, Width: 300, Height: 280);
-          Style: (BackgroundColor: #111827CC, BorderColor: #334155, BorderWidth: 1);
-          Label #ComingSoonLabel3 {
-            Anchor: (Top: 120, Width: 280, Height: 32);
-            Text: "Coming Soon";
-            Style: (FontSize: 20, Alignment: Center, Color: #94A3B8);
-          }
-        }
-
-        Group #ComingSoonCard4 {
-          Anchor: (Left: 20, Width: 300, Height: 280);
-          Style: (BackgroundColor: #111827CC, BorderColor: #334155, BorderWidth: 1);
-          Label #ComingSoonLabel4 {
-            Anchor: (Top: 120, Width: 280, Height: 32);
-            Text: "Coming Soon";
-            Style: (FontSize: 20, Alignment: Center, Color: #94A3B8);
-          }
-        }
+      Label #TokenFinderCostLabel {
+        Anchor: (Top: 2, Width: 210, Height: 24);
+        Text: "Cost: 10 Tokens";
+        Style: (FontSize: 16, Alignment: Center);
       }
 
-      Button #CloseButton {
-        Anchor: (Top: 20, Width: 200, Height: 44);
-
-        Label #CloseButtonLabel {
-          Anchor: (Width: 180, Height: 30);
-          Text: "Close";
-          Style: (FontSize: 18, Alignment: Center, Color: #0F172A);
+      Button #TokenFinderUpgradeButton {
+        Anchor: (Top: 8, Width: 180, Height: 40);
+        Label #TokenFinderUpgradeButtonLabel {
+          Anchor: (Width: 160, Height: 28);
+          Text: "Upgrade";
+          Style: (FontSize: 16, Alignment: Center);
         }
       }
+    }
+
+    Group #Tile2 {
+      Anchor: (Left: 20, Width: 220, Height: 220);
+      LayoutMode: Top;
+      Label #Tile2Title { Anchor: (Top: 8, Width: 210, Height: 28); Text: "Coming Soon"; Style: (FontSize: 20, Alignment: Center); }
+      Label #Tile2Level { Anchor: (Top: 4, Width: 210, Height: 24); Text: "Level: --"; Style: (FontSize: 16, Alignment: Center); }
+      Label #Tile2Cost { Anchor: (Top: 2, Width: 210, Height: 24); Text: "Cost: N/A"; Style: (FontSize: 16, Alignment: Center); }
+      Button #Tile2Button { Anchor: (Top: 8, Width: 180, Height: 40); Label #Tile2ButtonLabel { Anchor: (Width: 160, Height: 28); Text: "Upgrade"; Style: (FontSize: 16, Alignment: Center); } }
+    }
+
+    Group #Tile3 {
+      Anchor: (Left: 20, Width: 220, Height: 220);
+      LayoutMode: Top;
+      Label #Tile3Title { Anchor: (Top: 8, Width: 210, Height: 28); Text: "Coming Soon"; Style: (FontSize: 20, Alignment: Center); }
+      Label #Tile3Level { Anchor: (Top: 4, Width: 210, Height: 24); Text: "Level: --"; Style: (FontSize: 16, Alignment: Center); }
+      Label #Tile3Cost { Anchor: (Top: 2, Width: 210, Height: 24); Text: "Cost: N/A"; Style: (FontSize: 16, Alignment: Center); }
+      Button #Tile3Button { Anchor: (Top: 8, Width: 180, Height: 40); Label #Tile3ButtonLabel { Anchor: (Width: 160, Height: 28); Text: "Upgrade"; Style: (FontSize: 16, Alignment: Center); } }
+    }
+
+    Group #Tile4 {
+      Anchor: (Left: 20, Width: 220, Height: 220);
+      LayoutMode: Top;
+      Label #Tile4Title { Anchor: (Top: 8, Width: 210, Height: 28); Text: "Coming Soon"; Style: (FontSize: 20, Alignment: Center); }
+      Label #Tile4Level { Anchor: (Top: 4, Width: 210, Height: 24); Text: "Level: --"; Style: (FontSize: 16, Alignment: Center); }
+      Label #Tile4Cost { Anchor: (Top: 2, Width: 210, Height: 24); Text: "Cost: N/A"; Style: (FontSize: 16, Alignment: Center); }
+      Button #Tile4Button { Anchor: (Top: 8, Width: 180, Height: 40); Label #Tile4ButtonLabel { Anchor: (Width: 160, Height: 28); Text: "Upgrade"; Style: (FontSize: 16, Alignment: Center); } }
+    }
+
+    Group #Tile5 {
+      Anchor: (Left: 20, Width: 220, Height: 220);
+      LayoutMode: Top;
+      Label #Tile5Title { Anchor: (Top: 8, Width: 210, Height: 28); Text: "Coming Soon"; Style: (FontSize: 20, Alignment: Center); }
+      Label #Tile5Level { Anchor: (Top: 4, Width: 210, Height: 24); Text: "Level: --"; Style: (FontSize: 16, Alignment: Center); }
+      Label #Tile5Cost { Anchor: (Top: 2, Width: 210, Height: 24); Text: "Cost: N/A"; Style: (FontSize: 16, Alignment: Center); }
+      Button #Tile5Button { Anchor: (Top: 8, Width: 180, Height: 40); Label #Tile5ButtonLabel { Anchor: (Width: 160, Height: 28); Text: "Upgrade"; Style: (FontSize: 16, Alignment: Center); } }
+    }
+  }
+
+  Button #CloseButton {
+    Anchor: (Top: 20, Left: 30, Width: 180, Height: 40);
+    Label #CloseButtonLabel {
+      Anchor: (Width: 160, Height: 28);
+      Text: "Close";
+      Style: (FontSize: 16, Alignment: Center);
     }
   }
 }
