@@ -1,8 +1,6 @@
-$C = "../../Common.ui";
+$C = "../Common.ui";
 
-Group #Root {
-  LayoutMode: Center;
-  Anchor: (Full: 1);
+$C.@PageOverlay #Root {
   Background: #10151c(0.96);
 
   Group #RootPanel {
