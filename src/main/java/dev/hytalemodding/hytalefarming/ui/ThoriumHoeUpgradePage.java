@@ -182,14 +182,39 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
                 return "resource stream is null";
             }
             String uiText = new String(is.readAllBytes(), StandardCharsets.UTF_8);
-            if (uiText.contains("Button #") && uiText.contains("\n      Text:")) {
-                return "unsupported Button.Text field detected";
+
+            String[] lines = uiText.split("\\R");
+            for (int i = 0; i < lines.length; i++) {
+                String line = lines[i].trim();
+                if (line.startsWith("Button #")) {
+                    for (int j = i + 1; j < lines.length; j++) {
+                        String inner = lines[j].trim();
+                        if (inner.startsWith("}")) {
+                            break;
+                        }
+                        if (inner.startsWith("Text:")) {
+                            return "unsupported Button.Text field detected at line " + (j + 1);
+                        }
+                    }
+                }
             }
-            if (uiText.contains("Group #") && uiText.contains("Style:")) {
-                return "potentially unsupported Group.Style field detected";
-            }
-            if (uiText.contains("Color:")) {
-                return "potentially unsupported LabelStyle.Color field detected";
+
+            for (int i = 0; i < lines.length; i++) {
+                String line = lines[i].trim();
+                if (line.startsWith("Group #")) {
+                    for (int j = i + 1; j < lines.length; j++) {
+                        String inner = lines[j].trim();
+                        if (inner.startsWith("}")) {
+                            break;
+                        }
+                        if (inner.startsWith("Style:")) {
+                            return "unsupported Group.Style field detected at line " + (j + 1);
+                        }
+                    }
+                }
+                if (line.contains("Style:") && line.contains("Color:")) {
+                    return "unsupported LabelStyle.Color field detected at line " + (i + 1) + "; use TextColor";
+                }
             }
             return null;
         } catch (Exception ex) {

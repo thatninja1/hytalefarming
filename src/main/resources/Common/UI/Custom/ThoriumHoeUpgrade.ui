@@ -1,26 +1,28 @@
 Group #Root {
   LayoutMode: Center;
+  Background: ($C.DrawBox) (Color: #0A1424DD);
 
   Group #MainPanel {
     Anchor: (Width: 1320, Height: 520);
     LayoutMode: Top;
+    Background: ($C.DrawBox) (Color: #0F1B2CDD);
 
     Label #TitleLabel {
       Anchor: (Top: 18, Width: 1280, Height: 52);
       Text: "Ninja Farming";
-      Style: (FontSize: 42, Alignment: Center);
+      Style: (FontSize: 42, Alignment: Center, TextColor: #E5E7EB);
     }
 
     Label #SubtitleLabel {
       Anchor: (Top: 2, Width: 1280, Height: 30);
       Text: "Upgrade your Thorium Hoe";
-      Style: (FontSize: 20, Alignment: Center);
+      Style: (FontSize: 20, Alignment: Center, TextColor: #CBD5E1);
     }
 
     Label #TokenBalanceLabel {
       Anchor: (Top: 6, Width: 1280, Height: 30);
       Text: "Tokens: 0";
-      Style: (FontSize: 22, Alignment: Center);
+      Style: (FontSize: 22, Alignment: Center, TextColor: #93C5FD);
     }
 
     Group #UpgradeRow {
@@ -30,23 +32,24 @@ Group #Root {
       Group #TokenFinderTile {
         Anchor: (Width: 240, Height: 230);
         LayoutMode: Top;
+        Background: ($C.DrawBox) (Color: #1A2B40CC);
 
         Label #TokenFinderTitle {
           Anchor: (Top: 8, Width: 220, Height: 28);
           Text: "Token Finder";
-          Style: (FontSize: 20, Alignment: Center);
+          Style: (FontSize: 20, Alignment: Center, TextColor: #E2E8F0);
         }
 
         Label #TokenFinderLevelLabel {
           Anchor: (Top: 4, Width: 220, Height: 24);
           Text: "Level: 0 / 10";
-          Style: (FontSize: 16, Alignment: Center);
+          Style: (FontSize: 16, Alignment: Center, TextColor: #BFDBFE);
         }
 
         Label #TokenFinderCostLabel {
           Anchor: (Top: 2, Width: 220, Height: 24);
           Text: "Cost: 10 Tokens";
-          Style: (FontSize: 16, Alignment: Center);
+          Style: (FontSize: 16, Alignment: Center, TextColor: #BFDBFE);
         }
 
         Button #TokenFinderUpgradeButton {
@@ -54,7 +57,7 @@ Group #Root {
           Label #TokenFinderUpgradeButtonLabel {
             Anchor: (Width: 170, Height: 28);
             Text: "Upgrade";
-            Style: (FontSize: 16, Alignment: Center);
+            Style: (FontSize: 16, Alignment: Center, TextColor: #E2E8F0);
           }
         }
       }
@@ -62,37 +65,41 @@ Group #Root {
       Group #Tile2 {
         Anchor: (Left: 20, Width: 240, Height: 230);
         LayoutMode: Top;
-        Label #Tile2Title { Anchor: (Top: 8, Width: 220, Height: 28); Text: "Coming Soon"; Style: (FontSize: 20, Alignment: Center); }
-        Label #Tile2Level { Anchor: (Top: 4, Width: 220, Height: 24); Text: "Level: --"; Style: (FontSize: 16, Alignment: Center); }
-        Label #Tile2Cost { Anchor: (Top: 2, Width: 220, Height: 24); Text: "Cost: N/A"; Style: (FontSize: 16, Alignment: Center); }
-        Button #Tile2Button { Anchor: (Top: 10, Width: 190, Height: 42); Label #Tile2ButtonLabel { Anchor: (Width: 170, Height: 28); Text: "Upgrade"; Style: (FontSize: 16, Alignment: Center); } }
+        Background: ($C.DrawBox) (Color: #172334AA);
+        Label #Tile2Title { Anchor: (Top: 8, Width: 220, Height: 28); Text: "Coming Soon"; Style: (FontSize: 20, Alignment: Center, TextColor: #94A3B8); }
+        Label #Tile2Level { Anchor: (Top: 4, Width: 220, Height: 24); Text: "Level: --"; Style: (FontSize: 16, Alignment: Center, TextColor: #64748B); }
+        Label #Tile2Cost { Anchor: (Top: 2, Width: 220, Height: 24); Text: "Cost: N/A"; Style: (FontSize: 16, Alignment: Center, TextColor: #64748B); }
+        Button #Tile2Button { Anchor: (Top: 10, Width: 190, Height: 42); Label #Tile2ButtonLabel { Anchor: (Width: 170, Height: 28); Text: "Upgrade"; Style: (FontSize: 16, Alignment: Center, TextColor: #CBD5E1); } }
       }
 
       Group #Tile3 {
         Anchor: (Left: 20, Width: 240, Height: 230);
         LayoutMode: Top;
-        Label #Tile3Title { Anchor: (Top: 8, Width: 220, Height: 28); Text: "Coming Soon"; Style: (FontSize: 20, Alignment: Center); }
-        Label #Tile3Level { Anchor: (Top: 4, Width: 220, Height: 24); Text: "Level: --"; Style: (FontSize: 16, Alignment: Center); }
-        Label #Tile3Cost { Anchor: (Top: 2, Width: 220, Height: 24); Text: "Cost: N/A"; Style: (FontSize: 16, Alignment: Center); }
-        Button #Tile3Button { Anchor: (Top: 10, Width: 190, Height: 42); Label #Tile3ButtonLabel { Anchor: (Width: 170, Height: 28); Text: "Upgrade"; Style: (FontSize: 16, Alignment: Center); } }
+        Background: ($C.DrawBox) (Color: #172334AA);
+        Label #Tile3Title { Anchor: (Top: 8, Width: 220, Height: 28); Text: "Coming Soon"; Style: (FontSize: 20, Alignment: Center, TextColor: #94A3B8); }
+        Label #Tile3Level { Anchor: (Top: 4, Width: 220, Height: 24); Text: "Level: --"; Style: (FontSize: 16, Alignment: Center, TextColor: #64748B); }
+        Label #Tile3Cost { Anchor: (Top: 2, Width: 220, Height: 24); Text: "Cost: N/A"; Style: (FontSize: 16, Alignment: Center, TextColor: #64748B); }
+        Button #Tile3Button { Anchor: (Top: 10, Width: 190, Height: 42); Label #Tile3ButtonLabel { Anchor: (Width: 170, Height: 28); Text: "Upgrade"; Style: (FontSize: 16, Alignment: Center, TextColor: #CBD5E1); } }
       }
 
       Group #Tile4 {
         Anchor: (Left: 20, Width: 240, Height: 230);
         LayoutMode: Top;
-        Label #Tile4Title { Anchor: (Top: 8, Width: 220, Height: 28); Text: "Coming Soon"; Style: (FontSize: 20, Alignment: Center); }
-        Label #Tile4Level { Anchor: (Top: 4, Width: 220, Height: 24); Text: "Level: --"; Style: (FontSize: 16, Alignment: Center); }
-        Label #Tile4Cost { Anchor: (Top: 2, Width: 220, Height: 24); Text: "Cost: N/A"; Style: (FontSize: 16, Alignment: Center); }
-        Button #Tile4Button { Anchor: (Top: 10, Width: 190, Height: 42); Label #Tile4ButtonLabel { Anchor: (Width: 170, Height: 28); Text: "Upgrade"; Style: (FontSize: 16, Alignment: Center); } }
+        Background: ($C.DrawBox) (Color: #172334AA);
+        Label #Tile4Title { Anchor: (Top: 8, Width: 220, Height: 28); Text: "Coming Soon"; Style: (FontSize: 20, Alignment: Center, TextColor: #94A3B8); }
+        Label #Tile4Level { Anchor: (Top: 4, Width: 220, Height: 24); Text: "Level: --"; Style: (FontSize: 16, Alignment: Center, TextColor: #64748B); }
+        Label #Tile4Cost { Anchor: (Top: 2, Width: 220, Height: 24); Text: "Cost: N/A"; Style: (FontSize: 16, Alignment: Center, TextColor: #64748B); }
+        Button #Tile4Button { Anchor: (Top: 10, Width: 190, Height: 42); Label #Tile4ButtonLabel { Anchor: (Width: 170, Height: 28); Text: "Upgrade"; Style: (FontSize: 16, Alignment: Center, TextColor: #CBD5E1); } }
       }
 
       Group #Tile5 {
         Anchor: (Left: 20, Width: 240, Height: 230);
         LayoutMode: Top;
-        Label #Tile5Title { Anchor: (Top: 8, Width: 220, Height: 28); Text: "Coming Soon"; Style: (FontSize: 20, Alignment: Center); }
-        Label #Tile5Level { Anchor: (Top: 4, Width: 220, Height: 24); Text: "Level: --"; Style: (FontSize: 16, Alignment: Center); }
-        Label #Tile5Cost { Anchor: (Top: 2, Width: 220, Height: 24); Text: "Cost: N/A"; Style: (FontSize: 16, Alignment: Center); }
-        Button #Tile5Button { Anchor: (Top: 10, Width: 190, Height: 42); Label #Tile5ButtonLabel { Anchor: (Width: 170, Height: 28); Text: "Upgrade"; Style: (FontSize: 16, Alignment: Center); } }
+        Background: ($C.DrawBox) (Color: #172334AA);
+        Label #Tile5Title { Anchor: (Top: 8, Width: 220, Height: 28); Text: "Coming Soon"; Style: (FontSize: 20, Alignment: Center, TextColor: #94A3B8); }
+        Label #Tile5Level { Anchor: (Top: 4, Width: 220, Height: 24); Text: "Level: --"; Style: (FontSize: 16, Alignment: Center, TextColor: #64748B); }
+        Label #Tile5Cost { Anchor: (Top: 2, Width: 220, Height: 24); Text: "Cost: N/A"; Style: (FontSize: 16, Alignment: Center, TextColor: #64748B); }
+        Button #Tile5Button { Anchor: (Top: 10, Width: 190, Height: 42); Label #Tile5ButtonLabel { Anchor: (Width: 170, Height: 28); Text: "Upgrade"; Style: (FontSize: 16, Alignment: Center, TextColor: #CBD5E1); } }
       }
     }
 
@@ -101,7 +108,7 @@ Group #Root {
       Label #CloseButtonLabel {
         Anchor: (Width: 160, Height: 28);
         Text: "Close";
-        Style: (FontSize: 16, Alignment: Center);
+        Style: (FontSize: 16, Alignment: Center, TextColor: #E2E8F0);
       }
     }
   }
