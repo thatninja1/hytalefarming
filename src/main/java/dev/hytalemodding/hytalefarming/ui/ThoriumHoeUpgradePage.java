@@ -18,11 +18,13 @@ import dev.hytalemodding.hytalefarming.config.EnchantsConfig;
 import dev.hytalemodding.hytalefarming.service.TokenService;
 
 import javax.annotation.Nonnull;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 
 public class ThoriumHoeUpgradePage extends CustomUIPage {
 
-    private static final String UI_TEMPLATE = "Pages/HytaleFarming/ThoriumHoeUpgrade.ui";
-    private static final String UI_RESOURCE_PATH = "Common/UI/Custom/Pages/HytaleFarming/ThoriumHoeUpgrade.ui";
+    private static final String UI_TEMPLATE = "Custom/ThoriumHoeUpgrade.ui";
+    private static final String UI_RESOURCE_PATH = "Common/UI/Custom/ThoriumHoeUpgrade.ui";
 
     private static final String ACTION_KEY = "action";
     private static final String ACTION_CLOSE = "close";
@@ -41,28 +43,39 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
 
         boolean hasResourceStreamUi = getClass().getResourceAsStream("/" + UI_RESOURCE_PATH) != null;
         boolean hasClasspathUi = getClass().getClassLoader().getResource(UI_RESOURCE_PATH) != null;
-        Debug.log("[HoeDebug] UI build start: template=" + UI_TEMPLATE
+        boolean looksLoadableFromAssetPack = UI_TEMPLATE.startsWith("Custom/") && hasResourceStreamUi;
+
+        Debug.log("[HoeDebug] UI build start: thread=" + Thread.currentThread().getName()
+                + " templateDoc=" + UI_TEMPLATE
                 + " expectedJarPath=" + UI_RESOURCE_PATH
                 + " resourceStreamExists=" + hasResourceStreamUi
-                + " classpathExists=" + hasClasspathUi);
+                + " classpathExists=" + hasClasspathUi
+                + " assetPackLoadableGuess=" + looksLoadableFromAssetPack);
 
-        if (!hasResourceStreamUi) {
-            Debug.log("[HoeDebug] UI open failure: missing resource /" + UI_RESOURCE_PATH);
+        if (!hasResourceStreamUi || !looksLoadableFromAssetPack) {
+            Debug.log("[HoeDebug] UI open failure: document not resolvable; skipping append");
             if (player != null) {
                 player.sendMessage(Message.raw("UI asset missing: " + UI_TEMPLATE));
             }
             return;
         }
 
+        String markupError = validateUiMarkupSafely();
+        if (markupError != null) {
+            Debug.log("[HoeDebug] UI open failure: markup validation failed -> " + markupError);
+            if (player != null) {
+                player.sendMessage(Message.raw("[HytaleFarming] UI parse failed; check server logs."));
+            }
+            return;
+        }
+
         try {
-            Debug.log("[HoeDebug] append UI_TEMPLATE=" + UI_TEMPLATE);
+            Debug.log("[HoeDebug] append(docOnly) -> " + UI_TEMPLATE);
             uiCommandBuilder.append(UI_TEMPLATE);
-
-            bindAndPopulate(ref, store, uiCommandBuilder, uiEventBuilder);
-
+            bindAndPopulate(uiCommandBuilder, uiEventBuilder);
             Debug.log("[HoeDebug] UI open success for player=" + playerRef.getUsername());
         } catch (Exception ex) {
-            Debug.log("[HoeDebug] UI open failure append UI_TEMPLATE failed: " + ex.getMessage());
+            Debug.log("[HoeDebug] UI open failure append failed: " + ex.getMessage());
             if (player != null) {
                 player.sendMessage(Message.raw("[HytaleFarming] Failed to open hoe upgrade UI."));
             }
@@ -73,7 +86,7 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
     public void handleDataEvent(@Nonnull Ref<EntityStore> ref,
                                 @Nonnull Store<EntityStore> store,
                                 String eventData) {
-        Debug.log("[HoeDebug] UI click event received: " + eventData);
+        Debug.log("[HoeDebug] UI click event received: player=" + playerRef.getUsername() + " event=" + eventData);
         if (eventData == null || eventData.isBlank()) {
             return;
         }
@@ -100,17 +113,17 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
         int currentLevel = tokenService.enchantLevel(playerRef.getUuid(), playerRef.getUsername(), "token_finder");
         int maxLevel = tokenFinderCfg.getMaxLevel();
         int cost = tokenFinderCfg.getUpgradeCost(currentLevel);
-        long balance = tokenService.balance(playerRef.getUuid(), playerRef.getUsername());
+        long balanceBefore = tokenService.balance(playerRef.getUuid(), playerRef.getUsername());
 
         if (currentLevel >= maxLevel) {
-            Debug.log("[HoeDebug] upgrade failed: token finder already maxed level=" + currentLevel + " max=" + maxLevel);
+            Debug.log("[HoeDebug] upgrade failed: reason=maxed level=" + currentLevel + " max=" + maxLevel);
             player.sendMessage(Message.raw("Token Finder is already max level."));
             refreshUi();
             return;
         }
 
-        if (balance < cost) {
-            Debug.log("[HoeDebug] upgrade failed: insufficient tokens balance=" + balance + " cost=" + cost);
+        if (balanceBefore < cost) {
+            Debug.log("[HoeDebug] upgrade failed: reason=insufficient balance=" + balanceBefore + " cost=" + cost);
             player.sendMessage(Message.raw("Not enough Tokens. Need " + cost + "."));
             refreshUi();
             return;
@@ -118,23 +131,25 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
 
         boolean upgraded = tokenService.tryUpgradeTokenFinder(playerRef.getUuid(), playerRef.getUsername());
         if (!upgraded) {
-            Debug.log("[HoeDebug] upgrade failed: tryUpgradeTokenFinder returned false");
+            Debug.log("[HoeDebug] upgrade failed: reason=serviceReturnedFalse");
             player.sendMessage(Message.raw("Upgrade failed. Please try again."));
             refreshUi();
             return;
         }
 
         int newLevel = tokenService.enchantLevel(playerRef.getUuid(), playerRef.getUsername(), "token_finder");
-        long newBalance = tokenService.balance(playerRef.getUuid(), playerRef.getUsername());
-        Debug.log("[HoeDebug] upgrade success: token_finder level " + currentLevel + " -> " + newLevel
-                + " balance " + balance + " -> " + newBalance);
+        long balanceAfter = tokenService.balance(playerRef.getUuid(), playerRef.getUsername());
+        Debug.log("[HoeDebug] upgrade success: cost=" + cost
+                + " balanceBefore=" + balanceBefore
+                + " balanceAfter=" + balanceAfter
+                + " levelBefore=" + currentLevel
+                + " levelAfter=" + newLevel
+                + " persisted=true");
         player.sendMessage(Message.raw("Token Finder upgraded to level " + newLevel + "."));
         refreshUi();
     }
 
-    private void bindAndPopulate(Ref<EntityStore> ref,
-                                 Store<EntityStore> store,
-                                 UICommandBuilder uiCommandBuilder,
+    private void bindAndPopulate(UICommandBuilder uiCommandBuilder,
                                  UIEventBuilder uiEventBuilder) {
         TokenService tokenService = HytaleFarmingPlugin.instance().getTokenService();
         EnchantsConfig.TokenFinder tokenFinderCfg = HytaleFarmingPlugin.instance().getEnchantsConfig().getTokenFinder();
@@ -147,7 +162,7 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
         uiCommandBuilder.set("#SubtitleLabel.Text", "Upgrade your Thorium Hoe");
         uiCommandBuilder.set("#TokenBalanceLabel.Text", "Tokens: " + balance);
         uiCommandBuilder.set("#TokenFinderLevelLabel.Text", "Level: " + level + " / " + maxLevel);
-        uiCommandBuilder.set("#TokenFinderCostLabel.Text", level >= maxLevel ? "Cost: MAX" : "Cost: " + cost + " Tokens");
+        uiCommandBuilder.set("#TokenFinderCostLabel.Text", level >= maxLevel ? "Cost: N/A" : "Cost: " + cost + " Tokens");
         uiCommandBuilder.set("#TokenFinderUpgradeButtonLabel.Text", level >= maxLevel ? "MAX" : "Upgrade");
 
         uiEventBuilder.addEventBinding(CustomUIEventBindingType.Activating, "#CloseButton", EventData.of(ACTION_KEY, ACTION_CLOSE));
@@ -158,6 +173,27 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
             Debug.log("[HoeDebug] bound UI event Activating -> #TokenFinderUpgradeButton");
         } else {
             Debug.log("[HoeDebug] token finder at MAX; no upgrade binding added");
+        }
+    }
+
+    private String validateUiMarkupSafely() {
+        try (InputStream is = getClass().getResourceAsStream("/" + UI_RESOURCE_PATH)) {
+            if (is == null) {
+                return "resource stream is null";
+            }
+            String uiText = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            if (uiText.contains("Button #") && uiText.contains("\n      Text:")) {
+                return "unsupported Button.Text field detected";
+            }
+            if (uiText.contains("Group #") && uiText.contains("Style:")) {
+                return "potentially unsupported Group.Style field detected";
+            }
+            if (uiText.contains("Color:")) {
+                return "potentially unsupported LabelStyle.Color field detected";
+            }
+            return null;
+        } catch (Exception ex) {
+            return "validation exception: " + ex.getMessage();
         }
     }
 

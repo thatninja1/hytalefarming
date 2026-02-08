@@ -68,10 +68,10 @@ public class HytaleFarmingPlugin extends JavaPlugin {
         Debug.log("Registered systems: TokenFinderBreakBlockSystem");
 
 
-        boolean uiAssetStreamPresent = getClass().getResourceAsStream("/Common/UI/Custom/Pages/HytaleFarming/ThoriumHoeUpgrade.ui") != null;
-        boolean uiAssetClasspathPresent = getClass().getClassLoader().getResource("Common/UI/Custom/Pages/HytaleFarming/ThoriumHoeUpgrade.ui") != null;
-        Debug.log("[HoeDebug] startup UI asset check resourceStream(/Common/UI/Custom/Pages/HytaleFarming/ThoriumHoeUpgrade.ui)="
-                + uiAssetStreamPresent + " classLoader(Common/UI/Custom/Pages/HytaleFarming/ThoriumHoeUpgrade.ui)=" + uiAssetClasspathPresent);
+        boolean uiAssetStreamPresent = getClass().getResourceAsStream("/Common/UI/Custom/ThoriumHoeUpgrade.ui") != null;
+        boolean uiAssetClasspathPresent = getClass().getClassLoader().getResource("Common/UI/Custom/ThoriumHoeUpgrade.ui") != null;
+        Debug.log("[HoeDebug] startup UI asset check resourceStream(/Common/UI/Custom/ThoriumHoeUpgrade.ui)="
+                + uiAssetStreamPresent + " classLoader(Common/UI/Custom/ThoriumHoeUpgrade.ui)=" + uiAssetClasspathPresent);
 
         this.inputPacketHook = new InputPacketHook(this);
         this.inputPacketHook.register();

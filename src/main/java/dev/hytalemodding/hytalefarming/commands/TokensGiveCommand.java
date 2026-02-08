@@ -27,6 +27,7 @@ public class TokensGiveCommand extends AbstractPlayerCommand {
         this.plugin = plugin;
         this.playerArg = withRequiredArg("player", "Target player", ArgTypes.PLAYER_REF);
         this.amountArg = withRequiredArg("amount", "Amount", ArgTypes.INTEGER);
+        requirePermission("hytalefarming.tokens.give");
     }
 
     @Override
