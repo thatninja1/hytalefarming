@@ -9,5 +9,6 @@ public class TokensCommandCollection extends AbstractCommandCollection {
         super("tokens", "Token currency commands");
         addSubCommand(new TokensBalanceCommand(plugin));
         addSubCommand(new TokensPayCommand(plugin));
+        addSubCommand(new TokensGiveCommand(plugin));
     }
 }

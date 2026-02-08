@@ -12,6 +12,7 @@ Hytale plugin/mod `v1.0.1` that turns `Tool_Hoe_Thorium` into an upgradeable hoe
   - `/tokens bal` (self)
   - `/tokens bal --player <player>` (target)
   - `/tokens pay --player <player> --amount <amount>`
+  - `/tokens give <player> <amount>` (online target)
   - `/tokenstop`
 
 ## Notes
