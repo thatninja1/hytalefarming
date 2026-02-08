@@ -163,7 +163,7 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
         uiCommandBuilder.set("#TokenBalanceLabel.Text", "Tokens: " + balance);
         uiCommandBuilder.set("#TokenFinderLevelLabel.Text", "Level: " + level + " / " + maxLevel);
         uiCommandBuilder.set("#TokenFinderCostLabel.Text", level >= maxLevel ? "Cost: N/A" : "Cost: " + cost + " Tokens");
-        uiCommandBuilder.set("#TokenFinderUpgradeButton.Text", level >= maxLevel ? "MAX" : "Upgrade");
+        uiCommandBuilder.set("#TokenFinderUpgradeButtonLabel.Text", level >= maxLevel ? "MAX" : "Upgrade");
 
         uiEventBuilder.addEventBinding(CustomUIEventBindingType.Activating, "#CloseButton", EventData.of(ACTION_KEY, ACTION_CLOSE));
         Debug.log("[HoeDebug] bound UI event Activating -> #CloseButton");
@@ -182,36 +182,41 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
                 return "resource stream is null";
             }
             String uiText = new String(is.readAllBytes(), StandardCharsets.UTF_8);
-
             String[] lines = uiText.split("\\R");
+
             for (int i = 0; i < lines.length; i++) {
                 String line = lines[i].trim();
-                if (line.startsWith("Button #")) {
+
+                if (line.startsWith("Button #") && line.endsWith("{")) {
+                    int depth = 1;
                     for (int j = i + 1; j < lines.length; j++) {
                         String inner = lines[j].trim();
-                        if (inner.startsWith("}")) {
-                            break;
-                        }
-                        if (inner.startsWith("Text:")) {
+                        depth += count(inner, '{');
+                        depth -= count(inner, '}');
+                        if (depth == 1 && inner.startsWith("Text:")) {
                             return "unsupported Button.Text field detected at line " + (j + 1);
                         }
-                    }
-                }
-            }
-
-            for (int i = 0; i < lines.length; i++) {
-                String line = lines[i].trim();
-                if (line.startsWith("Group #")) {
-                    for (int j = i + 1; j < lines.length; j++) {
-                        String inner = lines[j].trim();
-                        if (inner.startsWith("}")) {
+                        if (depth <= 0) {
                             break;
                         }
-                        if (inner.startsWith("Style:")) {
+                    }
+                }
+
+                if (line.startsWith("Group #") && line.endsWith("{")) {
+                    int depth = 1;
+                    for (int j = i + 1; j < lines.length; j++) {
+                        String inner = lines[j].trim();
+                        depth += count(inner, '{');
+                        depth -= count(inner, '}');
+                        if (depth == 1 && inner.startsWith("Style:")) {
                             return "unsupported Group.Style field detected at line " + (j + 1);
+                        }
+                        if (depth <= 0) {
+                            break;
                         }
                     }
                 }
+
                 if (line.contains("Style:") && line.matches(".*\\bColor\\s*:.*")) {
                     return "unsupported LabelStyle.Color field detected at line " + (i + 1) + "; use TextColor";
                 }
@@ -220,6 +225,16 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
         } catch (Exception ex) {
             return "validation exception: " + ex.getMessage();
         }
+    }
+
+    private int count(String line, char ch) {
+        int n = 0;
+        for (int i = 0; i < line.length(); i++) {
+            if (line.charAt(i) == ch) {
+                n++;
+            }
+        }
+        return n;
     }
 
     private void refreshUi() {
