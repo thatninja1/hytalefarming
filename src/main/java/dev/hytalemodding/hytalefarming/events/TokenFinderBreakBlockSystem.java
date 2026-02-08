@@ -42,6 +42,9 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         ItemStack inHand = event.getItemInHand();
         String itemId = inHand == null ? "<none>" : inHand.getItemId();
         String blockId = event.getBlockType() == null ? "<unknown>" : event.getBlockType().getId();
+        if (blockId != null && blockId.startsWith("*")) {
+            blockId = blockId.substring(1);
+        }
 
         PlayerRef playerRef = store.getComponent(ref, PlayerRef.getComponentType());
         if (playerRef == null) {
@@ -55,7 +58,14 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         if (!"Tool_Hoe_Thorium".equals(itemId)) {
             return;
         }
-        if (!(blockId.startsWith("Crop_") || blockId.startsWith("Plant_Crop_"))) {
+        boolean isCrop = blockId != null && (blockId.startsWith("Crop_") || blockId.startsWith("Plant_Crop_"));
+        if (!isCrop) {
+            return;
+        }
+
+        boolean isFullyGrown = blockId.contains("State_Definitions_StageFinal");
+        if (!isFullyGrown) {
+            Debug.log("[TokenFinder] Skipping token award: crop not fully grown blockId=" + blockId);
             return;
         }
 
