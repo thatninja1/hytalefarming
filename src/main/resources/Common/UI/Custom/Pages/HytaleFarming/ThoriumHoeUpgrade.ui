@@ -1,0 +1,108 @@
+$C = import("Common/UI/Common.ui");
+
+$C.@PageOverlay #Root {
+  Background: #10151c(0.96);
+
+  Group #MainPanel {
+    Anchor: (Width: 1320, Height: 560);
+    LayoutMode: Top;
+    Background: #0d1624(0.96);
+
+    Label #TitleLabel {
+      Anchor: (Top: 20, Width: 1280, Height: 52);
+      Text: "Ninja Farming";
+      Style: (FontSize: 42, Alignment: Center, TextColor: #E5E7EB);
+    }
+
+    Label #SubtitleLabel {
+      Anchor: (Top: 4, Width: 1280, Height: 30);
+      Text: "Upgrade your Thorium Hoe";
+      Style: (FontSize: 20, Alignment: Center, TextColor: #CBD5E1);
+    }
+
+    Label #TokenBalanceLabel {
+      Anchor: (Top: 8, Width: 1280, Height: 30);
+      Text: "Tokens: 0";
+      Style: (FontSize: 22, Alignment: Center, TextColor: #93C5FD);
+    }
+
+    Group #UpgradeRow {
+      Anchor: (Top: 24, Left: 20, Width: 1280, Height: 280);
+      LayoutMode: Left;
+
+      Group #TokenFinderTile {
+        Anchor: (Width: 240, Height: 250);
+        LayoutMode: Top;
+        Background: #1a2b40(0.92);
+
+        Label #TokenFinderTitle {
+          Anchor: (Top: 10, Width: 220, Height: 28);
+          Text: "Token Finder";
+          Style: (FontSize: 20, Alignment: Center, TextColor: #E2E8F0);
+        }
+
+        Label #TokenFinderLevelLabel {
+          Anchor: (Top: 6, Width: 220, Height: 24);
+          Text: "Level: 0 / 10";
+          Style: (FontSize: 16, Alignment: Center, TextColor: #BFDBFE);
+        }
+
+        Label #TokenFinderCostLabel {
+          Anchor: (Top: 4, Width: 220, Height: 24);
+          Text: "Cost: 10 Tokens";
+          Style: (FontSize: 16, Alignment: Center, TextColor: #BFDBFE);
+        }
+
+        $C.@SmallSecondaryTextButton #TokenFinderUpgradeButton {
+          Anchor: (Top: 12, Width: 190, Height: 42);
+          Text: "Upgrade";
+        }
+      }
+
+      Group #Tile2 {
+        Anchor: (Left: 20, Width: 240, Height: 250);
+        LayoutMode: Top;
+        Background: #172334(0.80);
+        Label #Tile2Title { Anchor: (Top: 10, Width: 220, Height: 28); Text: "Coming Soon"; Style: (FontSize: 20, Alignment: Center, TextColor: #94A3B8); }
+        Label #Tile2Level { Anchor: (Top: 6, Width: 220, Height: 24); Text: "Level: --"; Style: (FontSize: 16, Alignment: Center, TextColor: #64748B); }
+        Label #Tile2Cost { Anchor: (Top: 4, Width: 220, Height: 24); Text: "Cost: N/A"; Style: (FontSize: 16, Alignment: Center, TextColor: #64748B); }
+        $C.@SmallSecondaryTextButton #Tile2Button { Anchor: (Top: 12, Width: 190, Height: 42); Text: "Upgrade"; }
+      }
+
+      Group #Tile3 {
+        Anchor: (Left: 20, Width: 240, Height: 250);
+        LayoutMode: Top;
+        Background: #172334(0.80);
+        Label #Tile3Title { Anchor: (Top: 10, Width: 220, Height: 28); Text: "Coming Soon"; Style: (FontSize: 20, Alignment: Center, TextColor: #94A3B8); }
+        Label #Tile3Level { Anchor: (Top: 6, Width: 220, Height: 24); Text: "Level: --"; Style: (FontSize: 16, Alignment: Center, TextColor: #64748B); }
+        Label #Tile3Cost { Anchor: (Top: 4, Width: 220, Height: 24); Text: "Cost: N/A"; Style: (FontSize: 16, Alignment: Center, TextColor: #64748B); }
+        $C.@SmallSecondaryTextButton #Tile3Button { Anchor: (Top: 12, Width: 190, Height: 42); Text: "Upgrade"; }
+      }
+
+      Group #Tile4 {
+        Anchor: (Left: 20, Width: 240, Height: 250);
+        LayoutMode: Top;
+        Background: #172334(0.80);
+        Label #Tile4Title { Anchor: (Top: 10, Width: 220, Height: 28); Text: "Coming Soon"; Style: (FontSize: 20, Alignment: Center, TextColor: #94A3B8); }
+        Label #Tile4Level { Anchor: (Top: 6, Width: 220, Height: 24); Text: "Level: --"; Style: (FontSize: 16, Alignment: Center, TextColor: #64748B); }
+        Label #Tile4Cost { Anchor: (Top: 4, Width: 220, Height: 24); Text: "Cost: N/A"; Style: (FontSize: 16, Alignment: Center, TextColor: #64748B); }
+        $C.@SmallSecondaryTextButton #Tile4Button { Anchor: (Top: 12, Width: 190, Height: 42); Text: "Upgrade"; }
+      }
+
+      Group #Tile5 {
+        Anchor: (Left: 20, Width: 240, Height: 250);
+        LayoutMode: Top;
+        Background: #172334(0.80);
+        Label #Tile5Title { Anchor: (Top: 10, Width: 220, Height: 28); Text: "Coming Soon"; Style: (FontSize: 20, Alignment: Center, TextColor: #94A3B8); }
+        Label #Tile5Level { Anchor: (Top: 6, Width: 220, Height: 24); Text: "Level: --"; Style: (FontSize: 16, Alignment: Center, TextColor: #64748B); }
+        Label #Tile5Cost { Anchor: (Top: 4, Width: 220, Height: 24); Text: "Cost: N/A"; Style: (FontSize: 16, Alignment: Center, TextColor: #64748B); }
+        $C.@SmallSecondaryTextButton #Tile5Button { Anchor: (Top: 12, Width: 190, Height: 42); Text: "Upgrade"; }
+      }
+    }
+
+    $C.@SmallSecondaryTextButton #CloseButton {
+      Anchor: (Top: 24, Left: 20, Width: 180, Height: 40);
+      Text: "Close";
+    }
+  }
+}

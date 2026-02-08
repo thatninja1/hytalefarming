@@ -23,8 +23,8 @@ import java.nio.charset.StandardCharsets;
 
 public class ThoriumHoeUpgradePage extends CustomUIPage {
 
-    private static final String UI_TEMPLATE = "Custom/ThoriumHoeUpgrade.ui";
-    private static final String UI_RESOURCE_PATH = "Common/UI/Custom/ThoriumHoeUpgrade.ui";
+    private static final String UI_TEMPLATE = "Pages/HytaleFarming/ThoriumHoeUpgrade.ui";
+    private static final String UI_RESOURCE_PATH = "Common/UI/Custom/Pages/HytaleFarming/ThoriumHoeUpgrade.ui";
 
     private static final String ACTION_KEY = "action";
     private static final String ACTION_CLOSE = "close";
@@ -43,7 +43,7 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
 
         boolean hasResourceStreamUi = getClass().getResourceAsStream("/" + UI_RESOURCE_PATH) != null;
         boolean hasClasspathUi = getClass().getClassLoader().getResource(UI_RESOURCE_PATH) != null;
-        boolean looksLoadableFromAssetPack = UI_TEMPLATE.startsWith("Custom/") && hasResourceStreamUi;
+        boolean looksLoadableFromAssetPack = UI_TEMPLATE.startsWith("Pages/") && hasResourceStreamUi;
 
         Debug.log("[HoeDebug] UI build start: thread=" + Thread.currentThread().getName()
                 + " templateDoc=" + UI_TEMPLATE
@@ -163,7 +163,7 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
         uiCommandBuilder.set("#TokenBalanceLabel.Text", "Tokens: " + balance);
         uiCommandBuilder.set("#TokenFinderLevelLabel.Text", "Level: " + level + " / " + maxLevel);
         uiCommandBuilder.set("#TokenFinderCostLabel.Text", level >= maxLevel ? "Cost: N/A" : "Cost: " + cost + " Tokens");
-        uiCommandBuilder.set("#TokenFinderUpgradeButtonLabel.Text", level >= maxLevel ? "MAX" : "Upgrade");
+        uiCommandBuilder.set("#TokenFinderUpgradeButton.Text", level >= maxLevel ? "MAX" : "Upgrade");
 
         uiEventBuilder.addEventBinding(CustomUIEventBindingType.Activating, "#CloseButton", EventData.of(ACTION_KEY, ACTION_CLOSE));
         Debug.log("[HoeDebug] bound UI event Activating -> #CloseButton");
@@ -212,7 +212,7 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
                         }
                     }
                 }
-                if (line.contains("Style:") && line.contains("Color:")) {
+                if (line.contains("Style:") && line.matches(".*\\bColor\\s*:.*")) {
                     return "unsupported LabelStyle.Color field detected at line " + (i + 1) + "; use TextColor";
                 }
             }
