@@ -15,6 +15,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.IntFunction;
 
 public class TokenService {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -58,46 +59,37 @@ public class TokenService {
     }
 
     public synchronized boolean tryUpgradeTokenFinder(UUID playerId, String playerName) {
-        PlayerAccount account = account(playerId, playerName);
-        int current = account.data.getEnchantLevel("token_finder");
-        int max = enchantsConfig.getTokenFinder().getMaxLevel();
-        if (current >= max) return false;
-
-        int cost = enchantsConfig.getTokenFinder().getUpgradeCost(current);
-        if (account.data.getBalance() < cost) return false;
-
-        account.data.setBalance(account.data.getBalance() - cost);
-        account.data.setEnchantLevel("token_finder", current + 1);
-        save();
-        return true;
+        return tryUpgradeEnchant(playerId, playerName, "token_finder", enchantsConfig.getTokenFinder().getMaxLevel(),
+                current -> enchantsConfig.getTokenFinder().getUpgradeCost(current));
     }
-
 
     public synchronized boolean tryUpgradeFortune(UUID playerId, String playerName) {
-        PlayerAccount account = account(playerId, playerName);
-        int current = account.data.getEnchantLevel("fortune");
-        int max = enchantsConfig.getFortune().getMaxLevel();
-        if (current >= max) return false;
+        return tryUpgradeEnchant(playerId, playerName, "fortune", enchantsConfig.getFortune().getMaxLevel(),
+                current -> enchantsConfig.getFortune().getUpgradeCost(current));
+    }
 
-        int cost = enchantsConfig.getFortune().getUpgradeCost(current);
+    public synchronized boolean tryUpgradeKeyfinder(UUID playerId, String playerName) {
+        return tryUpgradeEnchant(playerId, playerName, "keyfinder", enchantsConfig.getKeyfinder().getMaxLevel(),
+                current -> enchantsConfig.getKeyfinder().getUpgradeCost(current));
+    }
+
+    public synchronized void addTokensForProc(UUID playerId, String playerName, long amount) {
+        addTokens(playerId, playerName, amount);
+    }
+
+
+    private boolean tryUpgradeEnchant(UUID playerId, String playerName, String enchantKey, int maxLevel, IntFunction<Integer> costProvider) {
+        PlayerAccount account = account(playerId, playerName);
+        int current = account.data.getEnchantLevel(enchantKey);
+        if (current >= maxLevel) return false;
+
+        int cost = costProvider.apply(Math.max(0, current));
         if (account.data.getBalance() < cost) return false;
 
         account.data.setBalance(account.data.getBalance() - cost);
-        account.data.setEnchantLevel("fortune", current + 1);
+        account.data.setEnchantLevel(enchantKey, current + 1);
         save();
         return true;
-    }
-    public synchronized long processTokenFinderCropBreak(UUID playerId, String playerName) {
-        int level = enchantLevel(playerId, playerName, "token_finder");
-        if (level <= 0) return 0;
-
-        int max = enchantsConfig.getTokenFinder().getMaxLevel();
-        double chance = Math.min(1D, (double) level / (double) max);
-        if (Math.random() > chance) return 0;
-
-        long awarded = (long) level * tokensConfig.getTokensTimes();
-        addTokens(playerId, playerName, awarded);
-        return awarded;
     }
 
     public synchronized List<LeaderboardEntry> top(int limit) {

@@ -11,8 +11,7 @@ public class UiConfig {
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
-    private String uiTitle = "Ninja Farming";
-    private String uiSubtitle = "Upgrade your Thorium Hoe";
+    private UiSection ui = new UiSection();
 
     public static UiConfig load(Path path) {
         try {
@@ -28,24 +27,33 @@ public class UiConfig {
                 Files.writeString(path, GSON.toJson(defaults));
                 return defaults;
             }
+            if (loaded.ui == null) {
+                loaded.ui = new UiSection();
+            }
             return loaded;
         } catch (IOException e) {
-            try {
-                UiConfig defaults = new UiConfig();
-                Files.createDirectories(path.getParent());
-                Files.writeString(path, GSON.toJson(defaults));
-                return defaults;
-            } catch (IOException ignored) {
-                throw new IllegalStateException("Failed loading ui config", e);
-            }
+            throw new IllegalStateException("Failed loading ui config", e);
         }
     }
 
     public String getUiTitle() {
-        return uiTitle == null || uiTitle.isBlank() ? "Ninja Farming" : uiTitle;
+        return ui == null ? new UiSection().getTitle() : ui.getTitle();
     }
 
     public String getUiSubtitle() {
-        return uiSubtitle == null || uiSubtitle.isBlank() ? "Upgrade your Thorium Hoe" : uiSubtitle;
+        return ui == null ? new UiSection().getSubtitle() : ui.getSubtitle();
+    }
+
+    public static class UiSection {
+        private String title = "Ninja Farming";
+        private String subtitle = "Upgrade your Thorium Hoe";
+
+        public String getTitle() {
+            return title == null || title.isBlank() ? "Ninja Farming" : title;
+        }
+
+        public String getSubtitle() {
+            return subtitle == null || subtitle.isBlank() ? "Upgrade your Thorium Hoe" : subtitle;
+        }
     }
 }

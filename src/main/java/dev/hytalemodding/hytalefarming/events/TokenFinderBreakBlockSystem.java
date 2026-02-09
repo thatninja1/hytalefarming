@@ -8,6 +8,7 @@ import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.component.system.EntityEventSystem;
 import com.hypixel.hytale.server.core.Message;
+import com.hypixel.hytale.server.core.command.system.CommandManager;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.event.events.ecs.BreakBlockEvent;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
@@ -16,8 +17,10 @@ import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.hytalemodding.hytalefarming.Debug;
 import dev.hytalemodding.hytalefarming.HytaleFarmingPlugin;
+import dev.hytalemodding.hytalefarming.config.EnchantsConfig;
 
 import javax.annotation.Nonnull;
+import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, BreakBlockEvent> {
@@ -53,13 +56,6 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
             return;
         }
 
-        int tokenFinderLevel = plugin.getTokenService().enchantLevel(playerRef.getUuid(), playerRef.getUsername(), "token_finder");
-        int fortuneLevel = plugin.getTokenService().enchantLevel(playerRef.getUuid(), playerRef.getUsername(), "fortune");
-        Debug.log("BreakBlockEvent player=" + player.getDisplayName()
-                + " item=" + itemId + " block=" + blockId
-                + " tokenFinderLevel=" + tokenFinderLevel
-                + " fortuneLevel=" + fortuneLevel);
-
         if (!"Tool_Hoe_Thorium".equals(itemId)) {
             return;
         }
@@ -70,37 +66,52 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         }
 
         boolean isFullyGrown = blockId.contains("State_Definitions_StageFinal");
-        Debug.log("[TokenFinder] cropFullyGrown=" + isFullyGrown + " blockId=" + blockId);
+        Debug.log("[EnchantProc] cropFullyGrown=" + isFullyGrown + " blockId=" + blockId + " player=" + playerRef.getUsername());
         if (!isFullyGrown) {
-            Debug.log("[TokenFinder] Skipping token award: crop not fully grown blockId=" + blockId);
             return;
         }
 
-        long awarded = plugin.getTokenService().processTokenFinderCropBreak(playerRef.getUuid(), playerRef.getUsername());
-        if (awarded > 0) {
-            int max = plugin.getEnchantsConfig().getTokenFinder().getMaxLevel();
-            double chance = Math.min(1D, (double) tokenFinderLevel / (double) max);
-            Debug.log("TokenFinder proc success player=" + player.getDisplayName() + " chance=" + chance + " awarded=" + awarded);
-            player.sendMessage(Message.raw("+" + awarded + " " + plugin.getTokensConfig().getCurrencyName() + " (Token Finder)"));
-        }
+        int tokenFinderLevel = plugin.getTokenService().enchantLevel(playerRef.getUuid(), playerRef.getUsername(), "token_finder");
+        int fortuneLevel = plugin.getTokenService().enchantLevel(playerRef.getUuid(), playerRef.getUsername(), "fortune");
+        int keyfinderLevel = plugin.getTokenService().enchantLevel(playerRef.getUuid(), playerRef.getUsername(), "keyfinder");
 
-        processFortuneProc(player, blockId, fortuneLevel);
+        processTokenFinder(player, playerRef, tokenFinderLevel);
+        processFortune(player, blockId, fortuneLevel);
+        processKeyfinder(player, playerRef, keyfinderLevel);
     }
 
-    private void processFortuneProc(Player player, String blockId, int fortuneLevel) {
-        if (fortuneLevel <= 0) {
+    private void processTokenFinder(Player player, PlayerRef playerRef, int level) {
+        EnchantsConfig.TokenFinder cfg = plugin.getEnchantsConfig().getTokenFinder();
+        int maxLevel = cfg.getMaxLevel();
+        if (!rollProc("TokenFinder", level, maxLevel, cfg.getEnchantProc(), false)) {
             return;
         }
 
-        int extraAmount = ThreadLocalRandom.current().nextInt(Math.max(0, fortuneLevel - 1), fortuneLevel + 1);
+        long awarded = (long) Math.max(0, level) * plugin.getTokensConfig().getTokensTimes();
+        if (awarded <= 0) {
+            return;
+        }
+
+        plugin.getTokenService().addTokens(playerRef.getUuid(), playerRef.getUsername(), awarded);
+        player.sendMessage(Message.raw("+" + awarded + " " + plugin.getTokensConfig().getCurrencyName() + " (Token Finder)"));
+    }
+
+    private void processFortune(Player player, String blockId, int level) {
+        EnchantsConfig.Fortune cfg = plugin.getEnchantsConfig().getFortune();
+        int maxLevel = cfg.getMaxLevel();
+        if (!rollProc("Fortune", level, maxLevel, cfg.getEnchantProc(), false)) {
+            return;
+        }
+
+        int extraAmount = ThreadLocalRandom.current().nextInt(Math.max(0, level - 1), Math.max(1, level) + 1);
         if (extraAmount <= 0) {
-            Debug.log("[Fortune] extra amount rolled 0; no extra items. level=" + fortuneLevel + " blockId=" + blockId);
+            Debug.log("[Fortune] rolled extraAmount=0 level=" + level + " blockId=" + blockId);
             return;
         }
 
         String cropKey = extractCropKey(blockId);
         if (cropKey == null || cropKey.isBlank()) {
-            Debug.log("[Fortune] could not extract crop key from blockId=" + blockId + "; skipping extra item grant");
+            Debug.log("[Fortune] could not extract crop key from blockId=" + blockId);
             return;
         }
 
@@ -109,14 +120,81 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         ItemStackTransaction tx = player.getInventory().getCombinedEverything().addItemStack(extraStack);
         boolean success = tx != null && tx.succeeded();
 
-        Debug.log("[Fortune] level=" + fortuneLevel
-                + " extraAmount=" + extraAmount
-                + " computedItemId=" + itemId
-                + " grantSucceeded=" + success);
+        Debug.log("[Fortune] blockId=" + blockId + " cropItem=" + itemId + " extraAmount=" + extraAmount + " grantSucceeded=" + success);
 
         if (success) {
             player.sendMessage(Message.raw("+" + extraAmount + " " + itemId + " (Fortune)"));
         }
+    }
+
+    private void processKeyfinder(Player player, PlayerRef playerRef, int level) {
+        EnchantsConfig.Keyfinder cfg = plugin.getEnchantsConfig().getKeyfinder();
+        int maxLevel = cfg.getMaxLevel();
+        if (!rollProc("Keyfinder", level, maxLevel, cfg.getEnchantProc(), true)) {
+            return;
+        }
+
+        EnchantsConfig.Crate chosenCrate = chooseCrate(cfg.getCrates());
+        if (chosenCrate == null) {
+            Debug.log("[Keyfinder] proc succeeded but no crate configuration available");
+            return;
+        }
+
+        String finalCommand = chosenCrate.getCommand()
+                .replace("{player}", playerRef.getUsername())
+                .replace("<crateid>", chosenCrate.getCrateId());
+
+        String normalizedCommand = finalCommand.startsWith("/") ? finalCommand.substring(1) : finalCommand;
+        Debug.log("[Keyfinder] proc succeeded crate=" + chosenCrate.getCrateId() + " command=" + normalizedCommand);
+        CommandManager.get().handleCommand(player, normalizedCommand);
+    }
+
+    private EnchantsConfig.Crate chooseCrate(List<EnchantsConfig.Crate> crates) {
+        if (crates == null || crates.isEmpty()) {
+            return null;
+        }
+
+        double totalWeight = 0;
+        for (EnchantsConfig.Crate crate : crates) {
+            totalWeight += crate.getCrateChance();
+        }
+
+        if (totalWeight <= 0D) {
+            return crates.getFirst();
+        }
+
+        double roll = ThreadLocalRandom.current().nextDouble(totalWeight);
+        double current = 0;
+        for (EnchantsConfig.Crate crate : crates) {
+            current += crate.getCrateChance();
+            if (roll <= current) {
+                return crate;
+            }
+        }
+
+        return crates.getLast();
+    }
+
+    private boolean rollProc(String enchantName, int level, int maxLevel, double enchantProc, boolean forceScaled) {
+        if (level <= 0) {
+            Debug.log("[EnchantProc] enchant=" + enchantName + " level=" + level + " maxLevel=" + maxLevel
+                    + " enchantProc=" + enchantProc + " effectiveProc=0.0 roll=n/a result=false");
+            return false;
+        }
+
+        double scaledProc = Math.max(0.0D, Math.min(1.0D, enchantProc * ((double) level / Math.max(1, maxLevel))));
+        double effectiveProc = (enchantProc >= 1.0D && !forceScaled) ? 1.0D : scaledProc;
+        double roll = ThreadLocalRandom.current().nextDouble();
+        boolean result = roll <= effectiveProc;
+
+        Debug.log("[EnchantProc] enchant=" + enchantName
+                + " level=" + level
+                + " maxLevel=" + maxLevel
+                + " enchantProc=" + enchantProc
+                + " effectiveProc=" + effectiveProc
+                + " roll=" + roll
+                + " result=" + result);
+        return result;
     }
 
     private String extractCropKey(String blockId) {

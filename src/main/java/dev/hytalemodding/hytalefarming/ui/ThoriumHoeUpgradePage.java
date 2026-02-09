@@ -30,6 +30,7 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
     private static final String ACTION_CLOSE = "close";
     private static final String ACTION_UPGRADE_TOKEN_FINDER = "upgrade_token_finder";
     private static final String ACTION_UPGRADE_FORTUNE = "upgrade_fortune";
+    private static final String ACTION_UPGRADE_KEYFINDER = "upgrade_keyfinder";
 
     public ThoriumHoeUpgradePage(PlayerRef playerRef) {
         super(playerRef, CustomPageLifetime.CanDismiss);
@@ -100,7 +101,8 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
 
         boolean tokenFinderClicked = eventData.contains(ACTION_UPGRADE_TOKEN_FINDER);
         boolean fortuneClicked = eventData.contains(ACTION_UPGRADE_FORTUNE);
-        if (!tokenFinderClicked && !fortuneClicked) {
+        boolean keyfinderClicked = eventData.contains(ACTION_UPGRADE_KEYFINDER);
+        if (!tokenFinderClicked && !fortuneClicked && !keyfinderClicked) {
             return;
         }
 
@@ -112,16 +114,28 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
 
         TokenService tokenService = HytaleFarmingPlugin.instance().getTokenService();
 
-        String enchantKey = tokenFinderClicked ? "token_finder" : "fortune";
+        String enchantKey;
+        String enchantName;
+        int maxLevel;
+        int cost;
+        if (tokenFinderClicked) {
+            enchantKey = "token_finder";
+            enchantName = "Token Finder";
+            maxLevel = HytaleFarmingPlugin.instance().getEnchantsConfig().getTokenFinder().getMaxLevel();
+            cost = HytaleFarmingPlugin.instance().getEnchantsConfig().getTokenFinder().getUpgradeCost(tokenService.enchantLevel(playerRef.getUuid(), playerRef.getUsername(), enchantKey));
+        } else if (fortuneClicked) {
+            enchantKey = "fortune";
+            enchantName = "Fortune";
+            maxLevel = HytaleFarmingPlugin.instance().getEnchantsConfig().getFortune().getMaxLevel();
+            cost = HytaleFarmingPlugin.instance().getEnchantsConfig().getFortune().getUpgradeCost(tokenService.enchantLevel(playerRef.getUuid(), playerRef.getUsername(), enchantKey));
+        } else {
+            enchantKey = "keyfinder";
+            enchantName = "Keyfinder";
+            maxLevel = HytaleFarmingPlugin.instance().getEnchantsConfig().getKeyfinder().getMaxLevel();
+            cost = HytaleFarmingPlugin.instance().getEnchantsConfig().getKeyfinder().getUpgradeCost(tokenService.enchantLevel(playerRef.getUuid(), playerRef.getUsername(), enchantKey));
+        }
         int currentLevel = tokenService.enchantLevel(playerRef.getUuid(), playerRef.getUsername(), enchantKey);
-        int maxLevel = tokenFinderClicked
-                ? HytaleFarmingPlugin.instance().getEnchantsConfig().getTokenFinder().getMaxLevel()
-                : HytaleFarmingPlugin.instance().getEnchantsConfig().getFortune().getMaxLevel();
-        int cost = tokenFinderClicked
-                ? HytaleFarmingPlugin.instance().getEnchantsConfig().getTokenFinder().getUpgradeCost(currentLevel)
-                : HytaleFarmingPlugin.instance().getEnchantsConfig().getFortune().getUpgradeCost(currentLevel);
         long balanceBefore = tokenService.balance(playerRef.getUuid(), playerRef.getUsername());
-        String enchantName = tokenFinderClicked ? "Token Finder" : "Fortune";
 
         if (currentLevel >= maxLevel) {
             Debug.log("[HoeDebug] upgrade failed: reason=maxed enchant=" + enchantKey + " level=" + currentLevel + " max=" + maxLevel);
@@ -137,9 +151,14 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
             return;
         }
 
-        boolean upgraded = tokenFinderClicked
-                ? tokenService.tryUpgradeTokenFinder(playerRef.getUuid(), playerRef.getUsername())
-                : tokenService.tryUpgradeFortune(playerRef.getUuid(), playerRef.getUsername());
+        boolean upgraded;
+        if (tokenFinderClicked) {
+            upgraded = tokenService.tryUpgradeTokenFinder(playerRef.getUuid(), playerRef.getUsername());
+        } else if (fortuneClicked) {
+            upgraded = tokenService.tryUpgradeFortune(playerRef.getUuid(), playerRef.getUsername());
+        } else {
+            upgraded = tokenService.tryUpgradeKeyfinder(playerRef.getUuid(), playerRef.getUsername());
+        }
         if (!upgraded) {
             Debug.log("[HoeDebug] upgrade failed: reason=serviceReturnedFalse enchant=" + enchantKey);
             player.sendMessage(Message.raw("Upgrade failed. Please try again."));
@@ -165,6 +184,7 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
         TokenService tokenService = HytaleFarmingPlugin.instance().getTokenService();
         EnchantsConfig.TokenFinder tokenFinderCfg = HytaleFarmingPlugin.instance().getEnchantsConfig().getTokenFinder();
         EnchantsConfig.Fortune fortuneCfg = HytaleFarmingPlugin.instance().getEnchantsConfig().getFortune();
+        EnchantsConfig.Keyfinder keyfinderCfg = HytaleFarmingPlugin.instance().getEnchantsConfig().getKeyfinder();
 
         long balance = tokenService.balance(playerRef.getUuid(), playerRef.getUsername());
         int tokenFinderLevel = tokenService.enchantLevel(playerRef.getUuid(), playerRef.getUsername(), "token_finder");
@@ -175,6 +195,10 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
         int fortuneMaxLevel = fortuneCfg.getMaxLevel();
         int fortuneCost = fortuneCfg.getUpgradeCost(fortuneLevel);
 
+        int keyfinderLevel = tokenService.enchantLevel(playerRef.getUuid(), playerRef.getUsername(), "keyfinder");
+        int keyfinderMaxLevel = keyfinderCfg.getMaxLevel();
+        int keyfinderCost = keyfinderCfg.getUpgradeCost(keyfinderLevel);
+
         uiCommandBuilder.set("#TitleLabel.Text", HytaleFarmingPlugin.instance().getUiConfig().getUiTitle());
         uiCommandBuilder.set("#SubtitleLabel.Text", HytaleFarmingPlugin.instance().getUiConfig().getUiSubtitle());
         uiCommandBuilder.set("#TokenBalanceLabel.Text", "Tokens: " + balance);
@@ -184,6 +208,9 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
         uiCommandBuilder.set("#FortuneLevelLabel.Text", "Level: " + fortuneLevel + " / " + fortuneMaxLevel);
         uiCommandBuilder.set("#FortuneCostLabel.Text", fortuneLevel >= fortuneMaxLevel ? "Cost: N/A" : "Cost: " + fortuneCost + " Tokens");
         uiCommandBuilder.set("#FortuneUpgradeButtonLabel.Text", fortuneLevel >= fortuneMaxLevel ? "MAX" : "Upgrade");
+        uiCommandBuilder.set("#KeyfinderLevelLabel.Text", "Level: " + keyfinderLevel + " / " + keyfinderMaxLevel);
+        uiCommandBuilder.set("#KeyfinderCostLabel.Text", keyfinderLevel >= keyfinderMaxLevel ? "Cost: N/A" : "Cost: " + keyfinderCost + " Tokens");
+        uiCommandBuilder.set("#KeyfinderUpgradeButtonLabel.Text", keyfinderLevel >= keyfinderMaxLevel ? "MAX" : "Upgrade");
 
         uiEventBuilder.addEventBinding(CustomUIEventBindingType.Activating, "#CloseButton", EventData.of(ACTION_KEY, ACTION_CLOSE));
         Debug.log("[HoeDebug] bound UI event Activating -> #CloseButton");
@@ -200,6 +227,13 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
             Debug.log("[HoeDebug] bound UI event Activating -> #FortuneUpgradeButton");
         } else {
             Debug.log("[HoeDebug] fortune at MAX; no upgrade binding added");
+        }
+
+        if (keyfinderLevel < keyfinderMaxLevel) {
+            uiEventBuilder.addEventBinding(CustomUIEventBindingType.Activating, "#KeyfinderUpgradeButton", EventData.of(ACTION_KEY, ACTION_UPGRADE_KEYFINDER));
+            Debug.log("[HoeDebug] bound UI event Activating -> #KeyfinderUpgradeButton");
+        } else {
+            Debug.log("[HoeDebug] keyfinder at MAX; no upgrade binding added");
         }
     }
 

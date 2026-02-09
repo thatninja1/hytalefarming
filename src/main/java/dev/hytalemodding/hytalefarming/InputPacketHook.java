@@ -40,17 +40,24 @@ public class InputPacketHook {
                 InteractionType type = update.interactionType;
                 Debug.log("[HoeDebug] SyncInteractionChains: player=" + playerRef.getUsername() + " type=" + type);
 
-                if (type != InteractionType.Secondary && type != InteractionType.Use) {
+                String heldItemId = update.itemInHandId == null ? "<null>" : update.itemInHandId;
+                boolean isThoriumHoe = "Tool_Hoe_Thorium".equals(heldItemId);
+
+                if (type != InteractionType.Secondary) {
+                    Debug.log("[HoeDebug] ignored interaction type=" + type + " player=" + playerRef.getUsername()
+                            + " heldItemId=" + heldItemId + " reason=only_secondary_allowed");
                     continue;
                 }
 
-                String heldItemId = update.itemInHandId == null ? "<null>" : update.itemInHandId;
-                boolean match = "Tool_Hoe_Thorium".equals(heldItemId);
-                Debug.log("[HoeDebug] heldItemId=" + heldItemId + " match=" + match);
-
-                if (match) {
-                    plugin.openUpgradeUiSafe(playerRef, null, type.name(), heldItemId);
+                if (!isThoriumHoe) {
+                    Debug.log("[HoeDebug] ignored interaction type=" + type + " player=" + playerRef.getUsername()
+                            + " heldItemId=" + heldItemId + " reason=non_thorium_hoe");
+                    continue;
                 }
+
+                Debug.log("[HoeDebug] accepted interaction type=" + type + " player=" + playerRef.getUsername()
+                        + " heldItemId=" + heldItemId + " -> opening UI");
+                plugin.openUpgradeUiSafe(playerRef, null, type.name(), heldItemId);
             }
         });
 
