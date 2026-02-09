@@ -14,6 +14,7 @@ import dev.hytalemodding.hytalefarming.commands.TokenTopCommand;
 import dev.hytalemodding.hytalefarming.commands.TokensCommandCollection;
 import dev.hytalemodding.hytalefarming.config.EnchantsConfig;
 import dev.hytalemodding.hytalefarming.config.TokensConfig;
+import dev.hytalemodding.hytalefarming.config.UiConfig;
 import dev.hytalemodding.hytalefarming.events.TokenFinderBreakBlockSystem;
 import dev.hytalemodding.hytalefarming.interaction.HoeUpgradeMenuInteraction;
 import dev.hytalemodding.hytalefarming.service.TokenService;
@@ -28,6 +29,7 @@ public class HytaleFarmingPlugin extends JavaPlugin {
     private TokensConfig tokensConfig;
     private EnchantsConfig enchantsConfig;
     private TokenService tokenService;
+    private UiConfig uiConfig;
     private InputPacketHook inputPacketHook;
 
     public HytaleFarmingPlugin(@Nonnull JavaPluginInit init) {
@@ -41,12 +43,14 @@ public class HytaleFarmingPlugin extends JavaPlugin {
 
         this.tokensConfig = TokensConfig.load(dataDirectory.resolve("tokens.json"));
         this.enchantsConfig = EnchantsConfig.load(dataDirectory.resolve("enchants.json"));
+        this.uiConfig = UiConfig.load(dataDirectory.resolve("config.json"));
 
         Debug.configure(tokensConfig.isDebug(), getLogger());
         Debug.log("setup() start");
         Debug.log("config loaded: currencyName=" + tokensConfig.getCurrencyName()
                 + ", tokensTimes=" + tokensConfig.getTokensTimes()
                 + ", debug=" + tokensConfig.isDebug());
+        Debug.log("ui config loaded: title=\"" + uiConfig.getUiTitle() + "\" subtitle=\"" + uiConfig.getUiSubtitle() + "\"");
 
         this.tokenService = new TokenService(dataDirectory, tokensConfig, enchantsConfig);
         Debug.log("token service initialized");
@@ -178,6 +182,10 @@ public class HytaleFarmingPlugin extends JavaPlugin {
 
     public EnchantsConfig getEnchantsConfig() {
         return enchantsConfig;
+    }
+
+    public UiConfig getUiConfig() {
+        return uiConfig;
     }
 
     public TokenService getTokenService() {

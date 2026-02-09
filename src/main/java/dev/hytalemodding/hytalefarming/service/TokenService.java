@@ -72,6 +72,21 @@ public class TokenService {
         return true;
     }
 
+
+    public synchronized boolean tryUpgradeFortune(UUID playerId, String playerName) {
+        PlayerAccount account = account(playerId, playerName);
+        int current = account.data.getEnchantLevel("fortune");
+        int max = enchantsConfig.getFortune().getMaxLevel();
+        if (current >= max) return false;
+
+        int cost = enchantsConfig.getFortune().getUpgradeCost(current);
+        if (account.data.getBalance() < cost) return false;
+
+        account.data.setBalance(account.data.getBalance() - cost);
+        account.data.setEnchantLevel("fortune", current + 1);
+        save();
+        return true;
+    }
     public synchronized long processTokenFinderCropBreak(UUID playerId, String playerName) {
         int level = enchantLevel(playerId, playerName, "token_finder");
         if (level <= 0) return 0;

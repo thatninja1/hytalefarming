@@ -12,6 +12,7 @@ public class EnchantsConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private TokenFinder tokenFinder = new TokenFinder();
+    private Fortune fortune = new Fortune();
 
     public static EnchantsConfig load(Path path) {
         try {
@@ -32,6 +33,10 @@ public class EnchantsConfig {
         return tokenFinder == null ? new TokenFinder() : tokenFinder;
     }
 
+    public Fortune getFortune() {
+        return fortune == null ? new Fortune() : fortune;
+    }
+
     public static class TokenFinder {
         private int maxLevel = 10;
         private int baseUpgradeCost = 10;
@@ -42,6 +47,20 @@ public class EnchantsConfig {
 
         public int getUpgradeCost(int currentLevel) {
             return Math.max(1, baseUpgradeCost) * (currentLevel + 1);
+        }
+    }
+
+    public static class Fortune {
+        private int maxLevel = 5;
+        private int baseUpgradeCost = 20;
+        private int upgradeCostIncrease = 100;
+
+        public int getMaxLevel() {
+            return Math.max(1, maxLevel);
+        }
+
+        public int getUpgradeCost(int currentLevel) {
+            return Math.max(1, baseUpgradeCost) + (Math.max(0, currentLevel) * Math.max(0, upgradeCostIncrease));
         }
     }
 }

@@ -64,35 +64,36 @@ Group #Root {
         }
       }
 
-      Group #Tile2 {
+      Group #FortuneTile {
         Anchor: (Left: 20, Width: 240, Height: 250);
         LayoutMode: Top;
-        Background: #172334(0.80);
+        Background: #1a2b40(0.92);
 
-        Label #Tile2Title {
+        Label #FortuneTitle {
           Anchor: (Top: 10, Width: 220, Height: 28);
-          Text: "Coming Soon";
-          Style: (FontSize: 20, Alignment: Center, TextColor: #94A3B8);
+          Text: "Fortune";
+          Style: (FontSize: 20, Alignment: Center, TextColor: #E2E8F0);
         }
 
-        Label #Tile2Level {
+        Label #FortuneLevelLabel {
           Anchor: (Top: 6, Width: 220, Height: 24);
-          Text: "Level: --";
-          Style: (FontSize: 16, Alignment: Center, TextColor: #64748B);
+          Text: "Level: 0 / 5";
+          Style: (FontSize: 16, Alignment: Center, TextColor: #BFDBFE);
         }
 
-        Label #Tile2Cost {
+        Label #FortuneCostLabel {
           Anchor: (Top: 4, Width: 220, Height: 24);
-          Text: "Cost: N/A";
-          Style: (FontSize: 16, Alignment: Center, TextColor: #64748B);
+          Text: "Cost: 20 Tokens";
+          Style: (FontSize: 16, Alignment: Center, TextColor: #BFDBFE);
         }
 
-        Button #Tile2Button {
+        Button #FortuneUpgradeButton {
           Anchor: (Top: 12, Width: 190, Height: 42);
-          Label {
+
+          Label #FortuneUpgradeButtonLabel {
             Anchor: (Width: 170, Height: 28);
             Text: "Upgrade";
-            Style: (FontSize: 16, Alignment: Center, TextColor: #CBD5E1);
+            Style: (FontSize: 16, Alignment: Center, TextColor: #E2E8F0);
           }
         }
       }
