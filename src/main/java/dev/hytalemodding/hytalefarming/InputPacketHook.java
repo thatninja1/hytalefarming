@@ -2,7 +2,6 @@ package dev.hytalemodding.hytalefarming;
 
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
-import com.hypixel.hytale.math.util.ChunkUtil;
 import com.hypixel.hytale.math.vector.Vector3i;
 import com.hypixel.hytale.protocol.InteractionChainData;
 import com.hypixel.hytale.protocol.InteractionSyncData;
@@ -26,7 +25,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public class InputPacketHook {
-    private static final long BREAK_OBSERVE_DELAY_MS = 200L;
+    private static final long BREAK_OBSERVE_DELAY_MS = 100L;
 
     private final HytaleFarmingPlugin plugin;
     private final Map<UUID, Integer> packetCounts = new ConcurrentHashMap<>();
@@ -125,14 +124,14 @@ public class InputPacketHook {
         }
 
         world.execute(() -> {
-            String blockId = "<unknown>";
+            String blockIdBefore = "<unknown>";
             try {
                 if (world.getBlockType(target.getX(), target.getY(), target.getZ()) != null) {
-                    blockId = TokenFinderBreakBlockSystem.normalizeBlockId(world.getBlockType(target.getX(), target.getY(), target.getZ()).getId());
+                    blockIdBefore = TokenFinderBreakBlockSystem.normalizeBlockId(world.getBlockType(target.getX(), target.getY(), target.getZ()).getId());
                 }
 
                 String cachedHeldItemId = heldItemId;
-                String cachedBrokenBlockId = blockId;
+                String cachedBrokenBlockId = blockIdBefore;
 
                 boolean harvestable = TokenFinderBreakBlockSystem.isValidHarvestableCrop(cachedBrokenBlockId);
                 Debug.log("[HoeDebug] interaction type=Use player=" + playerRef.getUsername()
@@ -147,35 +146,6 @@ public class InputPacketHook {
                     return;
                 }
 
-                Player player = store.getComponent(ref, Player.getComponentType());
-                if (player == null) {
-                    Debug.log("[Harvest] warning source=UseHarvest player component missing; cannot run player-context break");
-                    return;
-                }
-
-                int packetEntityId = resolveBreakerEntityIdFromPacket(update);
-                int refIndexEntityId = ref.getIndex();
-                int playerRefIndexEntityId = player.getReference() == null ? 0 : player.getReference().getIndex();
-                int breakerEntityId = firstPositive(packetEntityId, playerRefIndexEntityId, refIndexEntityId);
-
-                int packetHotbarSlot = Math.max(0, update.activeHotbarSlot);
-                int inventoryHotbarSlot = Math.max(0, player.getInventory().getActiveHotbarSlot());
-                int activeHotbarSlot = inventoryHotbarSlot;
-
-                Debug.log("[Harvest] source=UseHarvest breaker candidates packetEntityId=" + packetEntityId
-                        + " playerRefIndexEntityId=" + playerRefIndexEntityId
-                        + " refIndexEntityId=" + refIndexEntityId
-                        + " chosenBreakerEntityId=" + breakerEntityId
-                        + " chosenBreakerIdSource=" + breakerIdSource(packetEntityId, playerRefIndexEntityId, refIndexEntityId)
-                        + " packetHotbarSlot=" + packetHotbarSlot
-                        + " inventoryHotbarSlot=" + inventoryHotbarSlot
-                        + " chosenHotbarSlot=" + activeHotbarSlot
-                        + " chosenHotbarSlotSource=player.inventory.getActiveHotbarSlot()");
-
-                if (breakerEntityId <= 0) {
-                    Debug.log("[Harvest] warning source=UseHarvest chosen breakerEntityId <= 0; cannot guarantee vanilla break pipeline");
-                }
-
                 TokenFinderBreakBlockSystem.registerPendingUseHarvest(
                         playerRef,
                         target.getX(),
@@ -185,53 +155,23 @@ public class InputPacketHook {
                         cachedBrokenBlockId
                 );
 
-                boolean broke = false;
-                String breakPath = "none";
-                int localX = ChunkUtil.localCoordinate(target.getX());
-                int localZ = ChunkUtil.localCoordinate(target.getZ());
-                long chunkIndex = ChunkUtil.indexChunkFromBlock(target.getX(), target.getZ());
-
-                try {
-                    broke = world.breakBlock(target.getX(), target.getY(), target.getZ(), Math.max(0, breakerEntityId));
-                    breakPath = "world.breakBlock(x,y,z,breakerEntityId)";
-                } catch (Exception ignored) {
-                    // fallback below
-                }
-
-                if (!broke) {
-                    try {
-                        var chunk = world.getChunk(chunkIndex);
-                        if (chunk != null) {
-                            broke = chunk.breakBlock(localX, target.getY(), localZ, Math.max(0, breakerEntityId), activeHotbarSlot);
-                            breakPath = "chunk.breakBlock(localX,y,localZ,breakerEntityId,activeHotbarSlot)_fallback";
-                        }
-                    } catch (Exception ignored) {
-                        // final fallback below
-                    }
-                }
-
-                if (!broke) {
-                    broke = world.breakBlock(target.getX(), target.getY(), target.getZ(), 0);
-                    breakPath = "world.breakBlock(x,y,z,0_last_resort)";
-                }
-
-                Debug.log("[Harvest] usingRealBreak=true source=UseHarvest player=" + playerRef.getUsername()
+                Debug.log("[Harvest] registered pending Use context source=UseHarvest player=" + playerRef.getUsername()
                         + " target=" + target.getX() + "," + target.getY() + "," + target.getZ()
                         + " cachedHeldItemId=" + cachedHeldItemId
-                        + " cachedBrokenBlockId=" + cachedBrokenBlockId
-                        + " breakPath=" + breakPath
-                        + " activeHotbarSlot=" + activeHotbarSlot
-                        + " breakerEntityId=" + breakerEntityId
-                        + " chunkIndex=" + chunkIndex
-                        + " localX=" + localX + " localZ=" + localZ
-                        + " breakResult=" + broke);
+                        + " cachedBrokenBlockId=" + cachedBrokenBlockId);
 
-                Debug.log("[Harvest] vanillaDropsCaptured=unknown source=UseHarvest mode=engine_real_break");
-                Debug.log("[Harvest] vanillaEssenceCaptured=unknown source=UseHarvest mode=engine_real_break");
-
-                final boolean breakCallResult = broke;
+                Debug.log("[Harvest] scheduled delayed harvest verification source=UseHarvest delayMs=" + BREAK_OBSERVE_DELAY_MS
+                        + " target=" + target.getX() + "," + target.getY() + "," + target.getZ());
 
                 postUseVerifier.schedule(() -> world.execute(() -> {
+                    String blockIdAfter = "<unknown>";
+                    boolean blockStillFullyGrown = false;
+
+                    if (world.getBlockType(target.getX(), target.getY(), target.getZ()) != null) {
+                        blockIdAfter = TokenFinderBreakBlockSystem.normalizeBlockId(world.getBlockType(target.getX(), target.getY(), target.getZ()).getId());
+                    }
+                    blockStillFullyGrown = TokenFinderBreakBlockSystem.isValidHarvestableCrop(blockIdAfter);
+
                     boolean breakEventObserved = TokenFinderBreakBlockSystem.hasRecentBreakEventObservation(
                             playerRef,
                             target.getX(),
@@ -240,63 +180,45 @@ public class InputPacketHook {
                             2000L
                     );
 
-                    Debug.log("[Harvest] breakEventObservedAfterUse=" + breakEventObserved + " source=UseHarvest target="
-                            + target.getX() + "," + target.getY() + "," + target.getZ());
+                    Debug.log("[Harvest] delayed verification source=UseHarvest target="
+                            + target.getX() + "," + target.getY() + "," + target.getZ()
+                            + " blockBefore=" + cachedBrokenBlockId
+                            + " blockAfter=" + blockIdAfter
+                            + " blockStillFullyGrown=" + blockStillFullyGrown
+                            + " breakEventObserved=" + breakEventObserved);
 
-                    if (breakCallResult && !breakEventObserved) {
-                        Debug.log("[Harvest] warning source=UseHarvest break succeeded but no BreakBlockEvent observed; applying fallback proc pipeline");
-                        plugin.getTokenFinderBreakBlockSystem().handleCropBreakAndProcs(
-                                player,
-                                playerRef,
-                                cachedHeldItemId,
-                                cachedBrokenBlockId,
-                                target,
-                                "UseHarvestFallback"
-                        );
+                    if (blockStillFullyGrown) {
+                        Debug.log("[Harvest] skipped proc pipeline source=UseHarvest reason=vanilla_harvest_not_observed target="
+                                + target.getX() + "," + target.getY() + "," + target.getZ());
+                        return;
                     }
+
+                    Player player = store.getComponent(ref, Player.getComponentType());
+                    if (player == null) {
+                        Debug.log("[Harvest] skipped proc pipeline source=UseHarvest reason=player_component_missing");
+                        return;
+                    }
+
+                    Debug.log("[Harvest] invoking proc pipeline source=UseHarvest target="
+                            + target.getX() + "," + target.getY() + "," + target.getZ()
+                            + " cachedHeldItemId=" + cachedHeldItemId
+                            + " cachedBrokenBlockId=" + cachedBrokenBlockId);
+
+                    plugin.getTokenFinderBreakBlockSystem().handleCropBreakAndProcs(
+                            player,
+                            playerRef,
+                            cachedHeldItemId,
+                            cachedBrokenBlockId,
+                            target,
+                            "UseHarvest"
+                    );
                 }), BREAK_OBSERVE_DELAY_MS, TimeUnit.MILLISECONDS);
             } catch (Exception ex) {
                 Debug.log("[HoeDebug] Use harvest failed player=" + playerRef.getUsername()
                         + " target=" + target.getX() + "," + target.getY() + "," + target.getZ()
-                        + " blockId=" + blockId + " error=" + ex.getMessage());
+                        + " blockId=" + blockIdBefore + " error=" + ex.getMessage());
             }
         });
-    }
-
-    private int resolveBreakerEntityIdFromPacket(SyncInteractionChain update) {
-        if (update.data != null && update.data.entityId > 0) {
-            return update.data.entityId;
-        }
-        if (update.interactionData != null) {
-            for (InteractionSyncData d : update.interactionData) {
-                if (d != null && d.entityId > 0) {
-                    return d.entityId;
-                }
-            }
-        }
-        return 0;
-    }
-
-    private int firstPositive(int... values) {
-        for (int value : values) {
-            if (value > 0) {
-                return value;
-            }
-        }
-        return 0;
-    }
-
-    private String breakerIdSource(int packetEntityId, int playerRefIndexEntityId, int refIndexEntityId) {
-        if (packetEntityId > 0) {
-            return "interaction_packet_entityId";
-        }
-        if (playerRefIndexEntityId > 0) {
-            return "player.reference.index";
-        }
-        if (refIndexEntityId > 0) {
-            return "playerRef.reference.index";
-        }
-        return "none";
     }
 
     private Vector3i resolveTargetBlock(SyncInteractionChain update) {

@@ -86,12 +86,11 @@ Keyfinder config keeps:
 - Valid crop detection remains:
   - crop id prefix (`Crop_` / `Plant_Crop_`)
   - fully-grown state (`State_Definitions_StageFinal`)
-- `Use` (F) on valid fully-grown crop with thorium hoe performs a real server break and then enters the same shared crop-break proc/reward pipeline used by normal break events.
+- `Use` (F) on a valid fully-grown crop with thorium hoe now **does not force-break the block in plugin code**; instead it registers pending context, waits briefly, verifies vanilla harvest changed the block away from `StageFinal`, then invokes the same shared proc/reward pipeline used by normal break events.
 - `Use` on non-crop / non-final crop does nothing and does not open UI.
 - Reward dedupe guard is applied per player+block position in a short window to avoid double-awards if Use + Break overlap.
 - Debug logs include `source=PrimaryBreak` vs `source=UseHarvest`, cached held item id, cached broken block id, validation result, and per-enchant proc rolls/results.
-- Harvest debug also reports real-break usage and vanilla-drop capture status (unknown when engine drop list is not exposed).
-- Debug now reports breaker id source and whether a `BreakBlockEvent` was observed after Use-harvest; if none is observed, a fallback enchant pipeline is logged/applied to avoid silent no-proc regressions.
+- Harvest debug reports: pending-context registration, delayed verification scheduling, block state before/after, whether vanilla harvest was observed, and whether proc pipeline was invoked or skipped.
 
 ## Drop-to-inventory note
 - In this plugin context, `BreakBlockEvent` does not expose computed drop lists for deterministic interception.
