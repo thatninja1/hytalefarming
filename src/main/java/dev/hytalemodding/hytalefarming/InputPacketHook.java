@@ -9,6 +9,7 @@ import com.hypixel.hytale.protocol.InteractionType;
 import com.hypixel.hytale.protocol.Packet;
 import com.hypixel.hytale.protocol.packets.interaction.SyncInteractionChain;
 import com.hypixel.hytale.protocol.packets.interaction.SyncInteractionChains;
+import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.io.adapter.PacketAdapters;
 import com.hypixel.hytale.server.core.io.adapter.PacketFilter;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
@@ -55,7 +56,7 @@ public class InputPacketHook {
                 }
 
                 if (type == InteractionType.Use) {
-                    handleUseHarvest(playerRef, heldItemId, update);
+                    handleUseHarvest(playerRef, heldItemId, update, update.activeHotbarSlot);
                     continue;
                 }
 
@@ -93,7 +94,7 @@ public class InputPacketHook {
         plugin.openUpgradeUiSafe(playerRef, null, InteractionType.Secondary.name(), heldItemId);
     }
 
-    private void handleUseHarvest(PlayerRef playerRef, String heldItemId, SyncInteractionChain update) {
+    private void handleUseHarvest(PlayerRef playerRef, String heldItemId, SyncInteractionChain update, int activeHotbarSlot) {
         if (!"Tool_Hoe_Thorium".equals(heldItemId)) {
             Debug.log("[HoeDebug] ignored interaction type=Use player=" + playerRef.getUsername()
                     + " heldItemId=" + heldItemId + " reason=non_thorium_hoe");
@@ -149,13 +150,34 @@ public class InputPacketHook {
                         cachedBrokenBlockId
                 );
 
-                // Use real block break so engine/vanilla crop + essence drop logic executes.
-                boolean broke = world.breakBlock(target.getX(), target.getY(), target.getZ(), 0);
+                // Use real player-context block break so vanilla loot tables (including Ingredient_Life_Essence) execute.
+                Player player = store.getComponent(ref, Player.getComponentType());
+                int breakerNetworkId = player == null ? 0 : player.getNetworkId();
+
+                boolean broke = false;
+                String breakPath = "none";
+                try {
+                    broke = world.breakBlock(target.getX(), target.getY(), target.getZ(), breakerNetworkId);
+                    breakPath = "breakBlock(x,y,z,playerNetworkId)";
+                } catch (Exception ignored) {
+                    // try final fallback below
+                }
+                if (!broke) {
+                    broke = world.breakBlock(target.getX(), target.getY(), target.getZ(), 0);
+                    breakPath = "breakBlock(x,y,z,0_fallback)";
+                }
+
                 Debug.log("[Harvest] usingRealBreak=true source=UseHarvest player=" + playerRef.getUsername()
                         + " target=" + target.getX() + "," + target.getY() + "," + target.getZ()
                         + " cachedHeldItemId=" + cachedHeldItemId
                         + " cachedBrokenBlockId=" + cachedBrokenBlockId
+                        + " breakPath=" + breakPath
+                        + " activeHotbarSlot=" + activeHotbarSlot
+                        + " breakerNetworkId=" + breakerNetworkId
                         + " breakResult=" + broke);
+
+                Debug.log("[Harvest] vanillaDropsCaptured=unknown source=UseHarvest mode=engine_real_break");
+                Debug.log("[Harvest] vanillaEssenceCaptured=unknown source=UseHarvest mode=engine_real_break");
             } catch (Exception ex) {
                 Debug.log("[HoeDebug] Use harvest failed player=" + playerRef.getUsername()
                         + " target=" + target.getX() + "," + target.getY() + "," + target.getZ()
