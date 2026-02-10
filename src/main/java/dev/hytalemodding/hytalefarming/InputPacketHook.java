@@ -2,6 +2,7 @@ package dev.hytalemodding.hytalefarming;
 
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.math.util.ChunkUtil;
 import com.hypixel.hytale.math.vector.Vector3i;
 import com.hypixel.hytale.protocol.InteractionChainData;
 import com.hypixel.hytale.protocol.InteractionSyncData;
@@ -9,7 +10,6 @@ import com.hypixel.hytale.protocol.InteractionType;
 import com.hypixel.hytale.protocol.Packet;
 import com.hypixel.hytale.protocol.packets.interaction.SyncInteractionChain;
 import com.hypixel.hytale.protocol.packets.interaction.SyncInteractionChains;
-import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.io.adapter.PacketAdapters;
 import com.hypixel.hytale.server.core.io.adapter.PacketFilter;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
@@ -56,7 +56,7 @@ public class InputPacketHook {
                 }
 
                 if (type == InteractionType.Use) {
-                    handleUseHarvest(playerRef, heldItemId, update, update.activeHotbarSlot);
+                    handleUseHarvest(playerRef, heldItemId, update, update.activeHotbarSlot, resolveBreakerEntityId(update));
                     continue;
                 }
 
@@ -94,7 +94,7 @@ public class InputPacketHook {
         plugin.openUpgradeUiSafe(playerRef, null, InteractionType.Secondary.name(), heldItemId);
     }
 
-    private void handleUseHarvest(PlayerRef playerRef, String heldItemId, SyncInteractionChain update, int activeHotbarSlot) {
+    private void handleUseHarvest(PlayerRef playerRef, String heldItemId, SyncInteractionChain update, int activeHotbarSlot, int breakerEntityId) {
         if (!"Tool_Hoe_Thorium".equals(heldItemId)) {
             Debug.log("[HoeDebug] ignored interaction type=Use player=" + playerRef.getUsername()
                     + " heldItemId=" + heldItemId + " reason=non_thorium_hoe");
@@ -151,20 +151,24 @@ public class InputPacketHook {
                 );
 
                 // Use real player-context block break so vanilla loot tables (including Ingredient_Life_Essence) execute.
-                Player player = store.getComponent(ref, Player.getComponentType());
-                int breakerNetworkId = player == null ? 0 : player.getNetworkId();
-
                 boolean broke = false;
                 String breakPath = "none";
+                int localX = ChunkUtil.localCoordinate(target.getX());
+                int localZ = ChunkUtil.localCoordinate(target.getZ());
+                long chunkIndex = ChunkUtil.indexChunkFromBlock(target.getX(), target.getZ());
                 try {
-                    broke = world.breakBlock(target.getX(), target.getY(), target.getZ(), breakerNetworkId);
-                    breakPath = "breakBlock(x,y,z,playerNetworkId)";
+                    var chunk = world.getChunk(chunkIndex);
+                    if (chunk != null) {
+                        broke = chunk.breakBlock(localX, target.getY(), localZ, breakerEntityId, Math.max(0, activeHotbarSlot));
+                        breakPath = "chunk.breakBlock(localX,y,localZ,breakerEntityId,activeHotbarSlot)";
+                    }
                 } catch (Exception ignored) {
-                    // try final fallback below
+                    // try fallback
                 }
+
                 if (!broke) {
-                    broke = world.breakBlock(target.getX(), target.getY(), target.getZ(), 0);
-                    breakPath = "breakBlock(x,y,z,0_fallback)";
+                    broke = world.breakBlock(target.getX(), target.getY(), target.getZ(), Math.max(0, breakerEntityId));
+                    breakPath = "world.breakBlock(x,y,z,breakerEntityId_fallback)";
                 }
 
                 Debug.log("[Harvest] usingRealBreak=true source=UseHarvest player=" + playerRef.getUsername()
@@ -173,7 +177,9 @@ public class InputPacketHook {
                         + " cachedBrokenBlockId=" + cachedBrokenBlockId
                         + " breakPath=" + breakPath
                         + " activeHotbarSlot=" + activeHotbarSlot
-                        + " breakerNetworkId=" + breakerNetworkId
+                        + " breakerEntityId=" + breakerEntityId
+                        + " chunkIndex=" + chunkIndex
+                        + " localX=" + localX + " localZ=" + localZ
                         + " breakResult=" + broke);
 
                 Debug.log("[Harvest] vanillaDropsCaptured=unknown source=UseHarvest mode=engine_real_break");
@@ -184,6 +190,21 @@ public class InputPacketHook {
                         + " blockId=" + blockId + " error=" + ex.getMessage());
             }
         });
+    }
+
+
+    private int resolveBreakerEntityId(SyncInteractionChain update) {
+        if (update.data != null && update.data.entityId > 0) {
+            return update.data.entityId;
+        }
+        if (update.interactionData != null) {
+            for (InteractionSyncData d : update.interactionData) {
+                if (d != null && d.entityId > 0) {
+                    return d.entityId;
+                }
+            }
+        }
+        return 0;
     }
 
     private Vector3i resolveTargetBlock(SyncInteractionChain update) {
