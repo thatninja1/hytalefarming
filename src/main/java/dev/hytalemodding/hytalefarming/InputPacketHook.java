@@ -26,11 +26,14 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public class InputPacketHook {
+    private static final long BREAK_OBSERVE_DELAY_MS = 200L;
+
     private final HytaleFarmingPlugin plugin;
     private final Map<UUID, Integer> packetCounts = new ConcurrentHashMap<>();
     private PacketFilter syncWatcher;
     private PacketFilter counterWatcher;
     private ScheduledExecutorService counterPrinter;
+    private ScheduledExecutorService postUseVerifier;
 
     public InputPacketHook(HytaleFarmingPlugin plugin) {
         this.plugin = plugin;
@@ -57,7 +60,7 @@ public class InputPacketHook {
                 }
 
                 if (type == InteractionType.Use) {
-                    handleUseHarvest(playerRef, heldItemId, update, update.activeHotbarSlot, resolveBreakerEntityId(playerRef, update));
+                    handleUseHarvest(playerRef, heldItemId, update);
                     continue;
                 }
 
@@ -80,6 +83,8 @@ public class InputPacketHook {
             packetCounts.clear();
         }, 3, 3, TimeUnit.SECONDS);
 
+        this.postUseVerifier = Executors.newSingleThreadScheduledExecutor();
+
         Debug.log("Registered inbound packet watchers (input hook)");
     }
 
@@ -95,7 +100,7 @@ public class InputPacketHook {
         plugin.openUpgradeUiSafe(playerRef, null, InteractionType.Secondary.name(), heldItemId);
     }
 
-    private void handleUseHarvest(PlayerRef playerRef, String heldItemId, SyncInteractionChain update, int activeHotbarSlot, int breakerEntityId) {
+    private void handleUseHarvest(PlayerRef playerRef, String heldItemId, SyncInteractionChain update) {
         if (!"Tool_Hoe_Thorium".equals(heldItemId)) {
             Debug.log("[HoeDebug] ignored interaction type=Use player=" + playerRef.getUsername()
                     + " heldItemId=" + heldItemId + " reason=non_thorium_hoe");
@@ -142,6 +147,35 @@ public class InputPacketHook {
                     return;
                 }
 
+                Player player = store.getComponent(ref, Player.getComponentType());
+                if (player == null) {
+                    Debug.log("[Harvest] warning source=UseHarvest player component missing; cannot run player-context break");
+                    return;
+                }
+
+                int packetEntityId = resolveBreakerEntityIdFromPacket(update);
+                int refIndexEntityId = ref.getIndex();
+                int playerRefIndexEntityId = player.getReference() == null ? 0 : player.getReference().getIndex();
+                int breakerEntityId = firstPositive(packetEntityId, playerRefIndexEntityId, refIndexEntityId);
+
+                int packetHotbarSlot = Math.max(0, update.activeHotbarSlot);
+                int inventoryHotbarSlot = Math.max(0, player.getInventory().getActiveHotbarSlot());
+                int activeHotbarSlot = inventoryHotbarSlot;
+
+                Debug.log("[Harvest] source=UseHarvest breaker candidates packetEntityId=" + packetEntityId
+                        + " playerRefIndexEntityId=" + playerRefIndexEntityId
+                        + " refIndexEntityId=" + refIndexEntityId
+                        + " chosenBreakerEntityId=" + breakerEntityId
+                        + " chosenBreakerIdSource=" + breakerIdSource(packetEntityId, playerRefIndexEntityId, refIndexEntityId)
+                        + " packetHotbarSlot=" + packetHotbarSlot
+                        + " inventoryHotbarSlot=" + inventoryHotbarSlot
+                        + " chosenHotbarSlot=" + activeHotbarSlot
+                        + " chosenHotbarSlotSource=player.inventory.getActiveHotbarSlot()");
+
+                if (breakerEntityId <= 0) {
+                    Debug.log("[Harvest] warning source=UseHarvest chosen breakerEntityId <= 0; cannot guarantee vanilla break pipeline");
+                }
+
                 TokenFinderBreakBlockSystem.registerPendingUseHarvest(
                         playerRef,
                         target.getX(),
@@ -151,33 +185,28 @@ public class InputPacketHook {
                         cachedBrokenBlockId
                 );
 
-                // Use real player-context block break so vanilla loot tables (including Ingredient_Life_Essence) execute.
                 boolean broke = false;
                 String breakPath = "none";
                 int localX = ChunkUtil.localCoordinate(target.getX());
                 int localZ = ChunkUtil.localCoordinate(target.getZ());
                 long chunkIndex = ChunkUtil.indexChunkFromBlock(target.getX(), target.getZ());
 
-                if (breakerEntityId <= 0) {
-                    Debug.log("[Harvest] warning source=UseHarvest breakerEntityId invalid (<=0); drops may not trigger vanilla pipeline");
-                }
-
                 try {
                     broke = world.breakBlock(target.getX(), target.getY(), target.getZ(), Math.max(0, breakerEntityId));
                     breakPath = "world.breakBlock(x,y,z,breakerEntityId)";
                 } catch (Exception ignored) {
-                    // try chunk fallback
+                    // fallback below
                 }
 
                 if (!broke) {
                     try {
                         var chunk = world.getChunk(chunkIndex);
                         if (chunk != null) {
-                            broke = chunk.breakBlock(localX, target.getY(), localZ, Math.max(0, breakerEntityId), Math.max(0, activeHotbarSlot));
+                            broke = chunk.breakBlock(localX, target.getY(), localZ, Math.max(0, breakerEntityId), activeHotbarSlot);
                             breakPath = "chunk.breakBlock(localX,y,localZ,breakerEntityId,activeHotbarSlot)_fallback";
                         }
                     } catch (Exception ignored) {
-                        // try final fallback
+                        // final fallback below
                     }
                 }
 
@@ -193,24 +222,31 @@ public class InputPacketHook {
                         + " breakPath=" + breakPath
                         + " activeHotbarSlot=" + activeHotbarSlot
                         + " breakerEntityId=" + breakerEntityId
-                        + " breakerEntityIdSource=interactionPacketOrRefIndex"
                         + " chunkIndex=" + chunkIndex
                         + " localX=" + localX + " localZ=" + localZ
                         + " breakResult=" + broke);
 
-                boolean breakEventObserved = TokenFinderBreakBlockSystem.hasRecentBreakEventObservation(playerRef, target.getX(), target.getY(), target.getZ(), 1500L);
-                Debug.log("[Harvest] breakEventObservedAfterUse=" + breakEventObserved + " source=UseHarvest target="
-                        + target.getX() + "," + target.getY() + "," + target.getZ());
-
                 Debug.log("[Harvest] vanillaDropsCaptured=unknown source=UseHarvest mode=engine_real_break");
                 Debug.log("[Harvest] vanillaEssenceCaptured=unknown source=UseHarvest mode=engine_real_break");
 
-                if (broke && !breakEventObserved) {
-                    Debug.log("[Harvest] warning source=UseHarvest break succeeded but no BreakBlockEvent observed; applying fallback proc pipeline");
-                    var playerFromStore = store.getComponent(ref, Player.getComponentType());
-                    if (playerFromStore != null) {
+                final boolean breakCallResult = broke;
+
+                postUseVerifier.schedule(() -> world.execute(() -> {
+                    boolean breakEventObserved = TokenFinderBreakBlockSystem.hasRecentBreakEventObservation(
+                            playerRef,
+                            target.getX(),
+                            target.getY(),
+                            target.getZ(),
+                            2000L
+                    );
+
+                    Debug.log("[Harvest] breakEventObservedAfterUse=" + breakEventObserved + " source=UseHarvest target="
+                            + target.getX() + "," + target.getY() + "," + target.getZ());
+
+                    if (breakCallResult && !breakEventObserved) {
+                        Debug.log("[Harvest] warning source=UseHarvest break succeeded but no BreakBlockEvent observed; applying fallback proc pipeline");
                         plugin.getTokenFinderBreakBlockSystem().handleCropBreakAndProcs(
-                                playerFromStore,
+                                player,
                                 playerRef,
                                 cachedHeldItemId,
                                 cachedBrokenBlockId,
@@ -218,7 +254,7 @@ public class InputPacketHook {
                                 "UseHarvestFallback"
                         );
                     }
-                }
+                }), BREAK_OBSERVE_DELAY_MS, TimeUnit.MILLISECONDS);
             } catch (Exception ex) {
                 Debug.log("[HoeDebug] Use harvest failed player=" + playerRef.getUsername()
                         + " target=" + target.getX() + "," + target.getY() + "," + target.getZ()
@@ -227,8 +263,7 @@ public class InputPacketHook {
         });
     }
 
-
-    private int resolveBreakerEntityId(PlayerRef playerRef, SyncInteractionChain update) {
+    private int resolveBreakerEntityIdFromPacket(SyncInteractionChain update) {
         if (update.data != null && update.data.entityId > 0) {
             return update.data.entityId;
         }
@@ -239,16 +274,29 @@ public class InputPacketHook {
                 }
             }
         }
+        return 0;
+    }
 
-        Ref<EntityStore> ref = playerRef.getReference();
-        if (ref != null && ref.isValid()) {
-            int idx = ref.getIndex();
-            if (idx > 0) {
-                return idx;
+    private int firstPositive(int... values) {
+        for (int value : values) {
+            if (value > 0) {
+                return value;
             }
         }
-
         return 0;
+    }
+
+    private String breakerIdSource(int packetEntityId, int playerRefIndexEntityId, int refIndexEntityId) {
+        if (packetEntityId > 0) {
+            return "interaction_packet_entityId";
+        }
+        if (playerRefIndexEntityId > 0) {
+            return "player.reference.index";
+        }
+        if (refIndexEntityId > 0) {
+            return "playerRef.reference.index";
+        }
+        return "none";
     }
 
     private Vector3i resolveTargetBlock(SyncInteractionChain update) {
@@ -287,6 +335,10 @@ public class InputPacketHook {
         if (counterPrinter != null) {
             counterPrinter.shutdownNow();
             counterPrinter = null;
+        }
+        if (postUseVerifier != null) {
+            postUseVerifier.shutdownNow();
+            postUseVerifier = null;
         }
     }
 }
