@@ -32,6 +32,7 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
     private static final long PENDING_USE_WINDOW_MS = 1200L;
     private static final Map<String, Long> RECENT_HARVEST_REWARDS = new ConcurrentHashMap<>();
     private static final Map<String, PendingUseHarvestContext> PENDING_USE_HARVESTS = new ConcurrentHashMap<>();
+    private static final Map<String, Long> RECENT_BREAK_EVENTS = new ConcurrentHashMap<>();
 
     private final HytaleFarmingPlugin plugin;
 
@@ -55,6 +56,10 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         PlayerRef playerRef = store.getComponent(ref, PlayerRef.getComponentType());
         if (playerRef == null) {
             return;
+        }
+
+        if (event.getTargetBlock() != null) {
+            markBreakEventObserved(playerRef, event.getTargetBlock().getX(), event.getTargetBlock().getY(), event.getTargetBlock().getZ(), "BreakBlockEvent");
         }
 
         ItemStack inHand = event.getItemInHand();
@@ -313,6 +318,22 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         }
 
         return context;
+    }
+
+
+    public static void markBreakEventObserved(PlayerRef playerRef, int x, int y, int z, String source) {
+        String key = playerRef.getUuid() + ":" + x + ":" + y + ":" + z;
+        RECENT_BREAK_EVENTS.put(key, System.currentTimeMillis());
+        Debug.log("[Harvest] observed break event source=" + source + " key=" + key);
+    }
+
+    public static boolean hasRecentBreakEventObservation(PlayerRef playerRef, int x, int y, int z, long maxAgeMs) {
+        String key = playerRef.getUuid() + ":" + x + ":" + y + ":" + z;
+        Long ts = RECENT_BREAK_EVENTS.get(key);
+        if (ts == null) {
+            return false;
+        }
+        return (System.currentTimeMillis() - ts) <= Math.max(0L, maxAgeMs);
     }
 
     private String extractCropKey(String blockId) {

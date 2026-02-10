@@ -10,6 +10,7 @@ import com.hypixel.hytale.protocol.InteractionType;
 import com.hypixel.hytale.protocol.Packet;
 import com.hypixel.hytale.protocol.packets.interaction.SyncInteractionChain;
 import com.hypixel.hytale.protocol.packets.interaction.SyncInteractionChains;
+import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.io.adapter.PacketAdapters;
 import com.hypixel.hytale.server.core.io.adapter.PacketFilter;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
@@ -56,7 +57,7 @@ public class InputPacketHook {
                 }
 
                 if (type == InteractionType.Use) {
-                    handleUseHarvest(playerRef, heldItemId, update, update.activeHotbarSlot, resolveBreakerEntityId(update));
+                    handleUseHarvest(playerRef, heldItemId, update, update.activeHotbarSlot, resolveBreakerEntityId(playerRef, update));
                     continue;
                 }
 
@@ -156,19 +157,33 @@ public class InputPacketHook {
                 int localX = ChunkUtil.localCoordinate(target.getX());
                 int localZ = ChunkUtil.localCoordinate(target.getZ());
                 long chunkIndex = ChunkUtil.indexChunkFromBlock(target.getX(), target.getZ());
+
+                if (breakerEntityId <= 0) {
+                    Debug.log("[Harvest] warning source=UseHarvest breakerEntityId invalid (<=0); drops may not trigger vanilla pipeline");
+                }
+
                 try {
-                    var chunk = world.getChunk(chunkIndex);
-                    if (chunk != null) {
-                        broke = chunk.breakBlock(localX, target.getY(), localZ, breakerEntityId, Math.max(0, activeHotbarSlot));
-                        breakPath = "chunk.breakBlock(localX,y,localZ,breakerEntityId,activeHotbarSlot)";
-                    }
+                    broke = world.breakBlock(target.getX(), target.getY(), target.getZ(), Math.max(0, breakerEntityId));
+                    breakPath = "world.breakBlock(x,y,z,breakerEntityId)";
                 } catch (Exception ignored) {
-                    // try fallback
+                    // try chunk fallback
                 }
 
                 if (!broke) {
-                    broke = world.breakBlock(target.getX(), target.getY(), target.getZ(), Math.max(0, breakerEntityId));
-                    breakPath = "world.breakBlock(x,y,z,breakerEntityId_fallback)";
+                    try {
+                        var chunk = world.getChunk(chunkIndex);
+                        if (chunk != null) {
+                            broke = chunk.breakBlock(localX, target.getY(), localZ, Math.max(0, breakerEntityId), Math.max(0, activeHotbarSlot));
+                            breakPath = "chunk.breakBlock(localX,y,localZ,breakerEntityId,activeHotbarSlot)_fallback";
+                        }
+                    } catch (Exception ignored) {
+                        // try final fallback
+                    }
+                }
+
+                if (!broke) {
+                    broke = world.breakBlock(target.getX(), target.getY(), target.getZ(), 0);
+                    breakPath = "world.breakBlock(x,y,z,0_last_resort)";
                 }
 
                 Debug.log("[Harvest] usingRealBreak=true source=UseHarvest player=" + playerRef.getUsername()
@@ -178,12 +193,32 @@ public class InputPacketHook {
                         + " breakPath=" + breakPath
                         + " activeHotbarSlot=" + activeHotbarSlot
                         + " breakerEntityId=" + breakerEntityId
+                        + " breakerEntityIdSource=interactionPacketOrRefIndex"
                         + " chunkIndex=" + chunkIndex
                         + " localX=" + localX + " localZ=" + localZ
                         + " breakResult=" + broke);
 
+                boolean breakEventObserved = TokenFinderBreakBlockSystem.hasRecentBreakEventObservation(playerRef, target.getX(), target.getY(), target.getZ(), 1500L);
+                Debug.log("[Harvest] breakEventObservedAfterUse=" + breakEventObserved + " source=UseHarvest target="
+                        + target.getX() + "," + target.getY() + "," + target.getZ());
+
                 Debug.log("[Harvest] vanillaDropsCaptured=unknown source=UseHarvest mode=engine_real_break");
                 Debug.log("[Harvest] vanillaEssenceCaptured=unknown source=UseHarvest mode=engine_real_break");
+
+                if (broke && !breakEventObserved) {
+                    Debug.log("[Harvest] warning source=UseHarvest break succeeded but no BreakBlockEvent observed; applying fallback proc pipeline");
+                    var playerFromStore = store.getComponent(ref, Player.getComponentType());
+                    if (playerFromStore != null) {
+                        plugin.getTokenFinderBreakBlockSystem().handleCropBreakAndProcs(
+                                playerFromStore,
+                                playerRef,
+                                cachedHeldItemId,
+                                cachedBrokenBlockId,
+                                target,
+                                "UseHarvestFallback"
+                        );
+                    }
+                }
             } catch (Exception ex) {
                 Debug.log("[HoeDebug] Use harvest failed player=" + playerRef.getUsername()
                         + " target=" + target.getX() + "," + target.getY() + "," + target.getZ()
@@ -193,7 +228,7 @@ public class InputPacketHook {
     }
 
 
-    private int resolveBreakerEntityId(SyncInteractionChain update) {
+    private int resolveBreakerEntityId(PlayerRef playerRef, SyncInteractionChain update) {
         if (update.data != null && update.data.entityId > 0) {
             return update.data.entityId;
         }
@@ -204,6 +239,15 @@ public class InputPacketHook {
                 }
             }
         }
+
+        Ref<EntityStore> ref = playerRef.getReference();
+        if (ref != null && ref.isValid()) {
+            int idx = ref.getIndex();
+            if (idx > 0) {
+                return idx;
+            }
+        }
+
         return 0;
     }
 
