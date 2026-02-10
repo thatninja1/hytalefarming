@@ -35,6 +35,7 @@ public class HytaleFarmingPlugin extends JavaPlugin {
     private TokenService tokenService;
     private UiConfig uiConfig;
     private InputPacketHook inputPacketHook;
+    private TokenFinderBreakBlockSystem tokenFinderBreakBlockSystem;
     private Path dataDirectory;
 
     public HytaleFarmingPlugin(@Nonnull JavaPluginInit init) {
@@ -75,7 +76,8 @@ public class HytaleFarmingPlugin extends JavaPlugin {
         );
         Debug.log("registered interaction codec: thorium_hoe_upgrade_menu");
 
-        getEntityStoreRegistry().registerSystem(new TokenFinderBreakBlockSystem(this));
+        this.tokenFinderBreakBlockSystem = new TokenFinderBreakBlockSystem(this);
+        getEntityStoreRegistry().registerSystem(tokenFinderBreakBlockSystem);
         Debug.log("Registered systems: TokenFinderBreakBlockSystem");
 
 
@@ -264,5 +266,9 @@ public class HytaleFarmingPlugin extends JavaPlugin {
 
     public TokenService getTokenService() {
         return tokenService;
+    }
+
+    public TokenFinderBreakBlockSystem getTokenFinderBreakBlockSystem() {
+        return tokenFinderBreakBlockSystem;
     }
 }

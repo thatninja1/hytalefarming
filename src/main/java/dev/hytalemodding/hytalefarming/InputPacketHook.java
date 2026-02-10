@@ -9,6 +9,7 @@ import com.hypixel.hytale.protocol.InteractionType;
 import com.hypixel.hytale.protocol.Packet;
 import com.hypixel.hytale.protocol.packets.interaction.SyncInteractionChain;
 import com.hypixel.hytale.protocol.packets.interaction.SyncInteractionChains;
+import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.io.adapter.PacketAdapters;
 import com.hypixel.hytale.server.core.io.adapter.PacketFilter;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
@@ -124,24 +125,44 @@ public class InputPacketHook {
                     blockId = TokenFinderBreakBlockSystem.normalizeBlockId(world.getBlockType(target.getX(), target.getY(), target.getZ()).getId());
                 }
 
-                boolean harvestable = TokenFinderBreakBlockSystem.isValidHarvestableCrop(blockId);
+                String cachedHeldItemId = heldItemId;
+                String cachedBrokenBlockId = blockId;
+
+                boolean harvestable = TokenFinderBreakBlockSystem.isValidHarvestableCrop(cachedBrokenBlockId);
                 Debug.log("[HoeDebug] interaction type=Use player=" + playerRef.getUsername()
-                        + " heldItemId=" + heldItemId
+                        + " heldItemId=" + cachedHeldItemId
                         + " target=" + target.getX() + "," + target.getY() + "," + target.getZ()
-                        + " targetBlockId=" + blockId
+                        + " targetBlockId=" + cachedBrokenBlockId
                         + " treatedAsHarvest=" + harvestable);
 
                 if (!harvestable) {
                     Debug.log("[HoeDebug] ignored interaction type=Use player=" + playerRef.getUsername()
-                            + " heldItemId=" + heldItemId + " reason=target_not_valid_fully_grown_crop blockId=" + blockId);
+                            + " heldItemId=" + cachedHeldItemId + " reason=target_not_valid_fully_grown_crop blockId=" + cachedBrokenBlockId);
                     return;
                 }
 
-                // Trigger real block break/harvest so existing BreakBlock reward path runs.
+                // Perform harvest break, then run exact same shared crop break/proc pipeline with cached data.
                 boolean broke = world.breakBlock(target.getX(), target.getY(), target.getZ(), 0);
                 Debug.log("[HoeDebug] Use harvest execution player=" + playerRef.getUsername()
                         + " target=" + target.getX() + "," + target.getY() + "," + target.getZ()
-                        + " blockId=" + blockId + " breakResult=" + broke);
+                        + " cachedHeldItemId=" + cachedHeldItemId
+                        + " cachedBrokenBlockId=" + cachedBrokenBlockId
+                        + " breakResult=" + broke);
+
+                Player player = store.getComponent(ref, Player.getComponentType());
+                if (player == null) {
+                    Debug.log("[HoeDebug] Use harvest skipped reward pipeline: player component missing");
+                    return;
+                }
+
+                plugin.getTokenFinderBreakBlockSystem().handleCropBreakAndProcs(
+                        player,
+                        playerRef,
+                        cachedHeldItemId,
+                        cachedBrokenBlockId,
+                        target,
+                        "UseHarvest"
+                );
             } catch (Exception ex) {
                 Debug.log("[HoeDebug] Use harvest failed player=" + playerRef.getUsername()
                         + " target=" + target.getX() + "," + target.getY() + "," + target.getZ()

@@ -50,34 +50,51 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
             return;
         }
 
-        ItemStack inHand = event.getItemInHand();
-        String itemId = inHand == null ? "<none>" : inHand.getItemId();
-        String blockId = event.getBlockType() == null ? "<unknown>" : event.getBlockType().getId();
-        if (blockId != null && blockId.startsWith("*")) {
-            blockId = blockId.substring(1);
-        }
-
         PlayerRef playerRef = store.getComponent(ref, PlayerRef.getComponentType());
         if (playerRef == null) {
             return;
         }
 
-        if (!"Tool_Hoe_Thorium".equals(itemId)) {
+        ItemStack inHand = event.getItemInHand();
+        String heldItemId = inHand == null ? "<none>" : inHand.getItemId();
+        String blockId = event.getBlockType() == null ? "<unknown>" : event.getBlockType().getId();
+        Vector3i target = event.getTargetBlock();
+
+        handleCropBreakAndProcs(player, playerRef, heldItemId, blockId, target, "PrimaryBreak");
+    }
+
+    public void handleCropBreakAndProcs(Player player,
+                                        PlayerRef playerRef,
+                                        String heldItemId,
+                                        String brokenBlockId,
+                                        Vector3i blockPos,
+                                        String source) {
+        String normalizedBlockId = normalizeBlockId(brokenBlockId);
+
+        Debug.log("[CropBreak] source=" + source
+                + " player=" + playerRef.getUsername()
+                + " heldItemId=" + heldItemId
+                + " cachedBrokenBlockId=" + normalizedBlockId
+                + " blockPos=" + (blockPos == null ? "<null>" : (blockPos.getX() + "," + blockPos.getY() + "," + blockPos.getZ())));
+
+        if (!"Tool_Hoe_Thorium".equals(heldItemId)) {
+            Debug.log("[CropBreak] source=" + source + " rejected reason=not_thorium_hoe heldItemId=" + heldItemId);
             return;
         }
 
-        boolean validHarvestable = isValidHarvestableCrop(blockId);
-        Debug.log("[EnchantProc] cropValidAndFullyGrown=" + validHarvestable + " blockId=" + blockId + " player=" + playerRef.getUsername());
+        boolean validHarvestable = isValidHarvestableCrop(normalizedBlockId);
+        Debug.log("[CropBreak] source=" + source + " fullyGrownValidationPassed=" + validHarvestable + " blockId=" + normalizedBlockId);
         if (!validHarvestable) {
+            Debug.log("[CropBreak] source=" + source + " rejected reason=not_valid_fully_grown_crop blockId=" + normalizedBlockId);
             return;
         }
 
-        Vector3i targetBlock = event.getTargetBlock();
-        int blockX = targetBlock == null ? 0 : targetBlock.getX();
-        int blockY = targetBlock == null ? 0 : targetBlock.getY();
-        int blockZ = targetBlock == null ? 0 : targetBlock.getZ();
-        if (!shouldProcessReward(playerRef, blockX, blockY, blockZ, "break_event")) {
-            Debug.log("[HarvestDedupe] Skipping duplicate reward player=" + playerRef.getUsername() + " block=" + blockX + "," + blockY + "," + blockZ);
+        int blockX = blockPos == null ? 0 : blockPos.getX();
+        int blockY = blockPos == null ? 0 : blockPos.getY();
+        int blockZ = blockPos == null ? 0 : blockPos.getZ();
+        if (!shouldProcessReward(playerRef, blockX, blockY, blockZ, source)) {
+            Debug.log("[HarvestDedupe] source=" + source + " skipped duplicate reward player=" + playerRef.getUsername()
+                    + " block=" + blockX + "," + blockY + "," + blockZ);
             return;
         }
 
@@ -85,17 +102,17 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         int fortuneLevel = plugin.getTokenService().enchantLevel(playerRef.getUuid(), playerRef.getUsername(), "fortune");
         int keyfinderLevel = plugin.getTokenService().enchantLevel(playerRef.getUuid(), playerRef.getUsername(), "keyfinder");
 
-        Debug.log("[Drops] Could not intercept drop list; leaving vanilla drops for blockId=" + blockId);
+        Debug.log("[Drops] Could not intercept drop list; leaving vanilla drops for blockId=" + normalizedBlockId + " source=" + source);
 
-        processTokenFinder(player, playerRef, tokenFinderLevel);
-        processFortune(player, blockId, fortuneLevel);
-        processKeyfinder(player, playerRef, keyfinderLevel);
+        processTokenFinder(player, playerRef, tokenFinderLevel, source);
+        processFortune(player, normalizedBlockId, fortuneLevel, source);
+        processKeyfinder(player, playerRef, keyfinderLevel, source);
     }
 
-    private void processTokenFinder(Player player, PlayerRef playerRef, int level) {
+    private void processTokenFinder(Player player, PlayerRef playerRef, int level, String source) {
         EnchantsConfig.TokenFinder cfg = plugin.getEnchantsConfig().getTokenFinder();
         int maxLevel = cfg.getMaxLevel();
-        if (!rollProc("token_finder", level, maxLevel, cfg.getEnchantProc())) {
+        if (!rollProc("token_finder", level, maxLevel, cfg.getEnchantProc(), source)) {
             return;
         }
 
@@ -108,22 +125,22 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         player.sendMessage(Message.raw("+" + awarded + " " + plugin.getTokensConfig().getCurrencyName() + " (Token Finder)"));
     }
 
-    private void processFortune(Player player, String blockId, int level) {
+    private void processFortune(Player player, String blockId, int level, String source) {
         EnchantsConfig.Fortune cfg = plugin.getEnchantsConfig().getFortune();
         int maxLevel = cfg.getMaxLevel();
-        if (!rollProc("fortune", level, maxLevel, cfg.getEnchantProc())) {
+        if (!rollProc("fortune", level, maxLevel, cfg.getEnchantProc(), source)) {
             return;
         }
 
         int extraAmount = ThreadLocalRandom.current().nextInt(Math.max(0, level - 1), Math.max(1, level) + 1);
         if (extraAmount <= 0) {
-            Debug.log("[Fortune] rolled extraAmount=0 level=" + level + " blockId=" + blockId);
+            Debug.log("[Fortune] source=" + source + " rolled extraAmount=0 level=" + level + " blockId=" + blockId);
             return;
         }
 
         String cropKey = extractCropKey(blockId);
         if (cropKey == null || cropKey.isBlank()) {
-            Debug.log("[Fortune] could not extract crop key from blockId=" + blockId);
+            Debug.log("[Fortune] source=" + source + " could not extract crop key from blockId=" + blockId);
             return;
         }
 
@@ -132,23 +149,23 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         ItemStackTransaction tx = player.getInventory().getCombinedEverything().addItemStack(extraStack);
         boolean success = tx != null && tx.succeeded();
 
-        Debug.log("[Fortune] blockId=" + blockId + " cropItem=" + itemId + " extraAmount=" + extraAmount + " grantSucceeded=" + success);
+        Debug.log("[Fortune] source=" + source + " blockId=" + blockId + " cropItem=" + itemId + " extraAmount=" + extraAmount + " grantSucceeded=" + success);
 
         if (success) {
             player.sendMessage(Message.raw("+" + extraAmount + " " + itemId + " (Fortune)"));
         }
     }
 
-    private void processKeyfinder(Player player, PlayerRef playerRef, int level) {
+    private void processKeyfinder(Player player, PlayerRef playerRef, int level, String source) {
         EnchantsConfig.Keyfinder cfg = plugin.getEnchantsConfig().getKeyfinder();
         int maxLevel = cfg.getMaxLevel();
-        if (!rollProc("keyfinder", level, maxLevel, cfg.getEnchantProc())) {
+        if (!rollProc("keyfinder", level, maxLevel, cfg.getEnchantProc(), source)) {
             return;
         }
 
         EnchantsConfig.Crate chosenCrate = chooseCrate(cfg.getCrates());
         if (chosenCrate == null) {
-            Debug.log("[Keyfinder] warning: proc succeeded but crate config is invalid; no command executed");
+            Debug.log("[Keyfinder] source=" + source + " warning: proc succeeded but crate config is invalid; no command executed");
             return;
         }
 
@@ -157,7 +174,7 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                 .replace("<crateid>", chosenCrate.getCrateId());
 
         String normalizedCommand = finalCommand.startsWith("/") ? finalCommand.substring(1) : finalCommand;
-        Debug.log("Keyfinder proc success -> selected crateId=" + chosenCrate.getCrateId() + " command=" + normalizedCommand);
+        Debug.log("Keyfinder proc success -> source=" + source + " selected crateId=" + chosenCrate.getCrateId() + " command=" + normalizedCommand);
         CommandManager.get().handleCommand(player, normalizedCommand);
     }
 
@@ -189,9 +206,9 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         return crates.getLast();
     }
 
-    private boolean rollProc(String enchantId, int level, int maxLevel, double enchantProcFromJson) {
+    private boolean rollProc(String enchantId, int level, int maxLevel, double enchantProcFromJson, String source) {
         if (level <= 0) {
-            Debug.log("[EnchantProc] enchant=" + enchantId + " level=" + level + " maxLevel=" + maxLevel
+            Debug.log("[EnchantProc] source=" + source + " enchant=" + enchantId + " level=" + level + " maxLevel=" + maxLevel
                     + " enchantProc=" + enchantProcFromJson + " computedChance=0.0 roll=n/a procResult=false");
             return false;
         }
@@ -207,7 +224,8 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         double roll = ThreadLocalRandom.current().nextDouble();
         boolean result = roll <= computedChance;
 
-        Debug.log("[EnchantProc] enchant=" + enchantId
+        Debug.log("[EnchantProc] source=" + source
+                + " enchant=" + enchantId
                 + " level=" + level
                 + " maxLevel=" + maxLevel
                 + " enchantProc=" + enchantProcFromJson
@@ -216,7 +234,6 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                 + " procResult=" + result);
         return result;
     }
-
 
     public static boolean isValidHarvestableCrop(String blockId) {
         if (blockId == null || blockId.isBlank()) {
