@@ -7,6 +7,7 @@ import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.component.system.EntityEventSystem;
+import com.hypixel.hytale.math.vector.Vector3i;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.command.system.CommandManager;
 import com.hypixel.hytale.server.core.entity.entities.Player;
@@ -21,9 +22,14 @@ import dev.hytalemodding.hytalefarming.config.EnchantsConfig;
 
 import javax.annotation.Nonnull;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, BreakBlockEvent> {
+
+    private static final long DEDUPE_WINDOW_MS = 250L;
+    private static final Map<String, Long> RECENT_HARVEST_REWARDS = new ConcurrentHashMap<>();
 
     private final HytaleFarmingPlugin plugin;
 
@@ -60,14 +66,18 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
             return;
         }
 
-        boolean isCrop = blockId != null && (blockId.startsWith("Crop_") || blockId.startsWith("Plant_Crop_"));
-        if (!isCrop) {
+        boolean validHarvestable = isValidHarvestableCrop(blockId);
+        Debug.log("[EnchantProc] cropValidAndFullyGrown=" + validHarvestable + " blockId=" + blockId + " player=" + playerRef.getUsername());
+        if (!validHarvestable) {
             return;
         }
 
-        boolean isFullyGrown = blockId.contains("State_Definitions_StageFinal");
-        Debug.log("[EnchantProc] cropFullyGrown=" + isFullyGrown + " blockId=" + blockId + " player=" + playerRef.getUsername());
-        if (!isFullyGrown) {
+        Vector3i targetBlock = event.getTargetBlock();
+        int blockX = targetBlock == null ? 0 : targetBlock.getX();
+        int blockY = targetBlock == null ? 0 : targetBlock.getY();
+        int blockZ = targetBlock == null ? 0 : targetBlock.getZ();
+        if (!shouldProcessReward(playerRef, blockX, blockY, blockZ, "break_event")) {
+            Debug.log("[HarvestDedupe] Skipping duplicate reward player=" + playerRef.getUsername() + " block=" + blockX + "," + blockY + "," + blockZ);
             return;
         }
 
@@ -205,6 +215,38 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                 + " roll=" + roll
                 + " procResult=" + result);
         return result;
+    }
+
+
+    public static boolean isValidHarvestableCrop(String blockId) {
+        if (blockId == null || blockId.isBlank()) {
+            return false;
+        }
+        String normalized = normalizeBlockId(blockId);
+        boolean isCrop = normalized.startsWith("Crop_") || normalized.startsWith("Plant_Crop_");
+        boolean isFullyGrown = normalized.contains("State_Definitions_StageFinal");
+        return isCrop && isFullyGrown;
+    }
+
+    public static String normalizeBlockId(String blockId) {
+        if (blockId == null) {
+            return null;
+        }
+        return blockId.startsWith("*") ? blockId.substring(1) : blockId;
+    }
+
+    public static boolean shouldProcessReward(PlayerRef playerRef, int x, int y, int z, String source) {
+        long now = System.currentTimeMillis();
+        String key = playerRef.getUuid() + ":" + x + ":" + y + ":" + z;
+        Long previous = RECENT_HARVEST_REWARDS.put(key, now);
+        if (previous == null) {
+            return true;
+        }
+        boolean allowed = (now - previous) > DEDUPE_WINDOW_MS;
+        if (!allowed) {
+            Debug.log("[HarvestDedupe] source=" + source + " player=" + playerRef.getUsername() + " key=" + key + " elapsedMs=" + (now - previous));
+        }
+        return allowed;
     }
 
     private String extractCropKey(String blockId) {

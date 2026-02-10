@@ -10,6 +10,7 @@ import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import dev.hytalemodding.hytalefarming.commands.FarmingCommandCollection;
 import dev.hytalemodding.hytalefarming.commands.TokenTopCommand;
 import dev.hytalemodding.hytalefarming.commands.TokensCommandCollection;
 import dev.hytalemodding.hytalefarming.config.EnchantsConfig;
@@ -21,7 +22,10 @@ import dev.hytalemodding.hytalefarming.service.TokenService;
 import dev.hytalemodding.hytalefarming.ui.ThoriumHoeUpgradePage;
 
 import javax.annotation.Nonnull;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 public class HytaleFarmingPlugin extends JavaPlugin {
     private static HytaleFarmingPlugin instance;
@@ -31,6 +35,7 @@ public class HytaleFarmingPlugin extends JavaPlugin {
     private TokenService tokenService;
     private UiConfig uiConfig;
     private InputPacketHook inputPacketHook;
+    private Path dataDirectory;
 
     public HytaleFarmingPlugin(@Nonnull JavaPluginInit init) {
         super(init);
@@ -39,7 +44,7 @@ public class HytaleFarmingPlugin extends JavaPlugin {
 
     @Override
     protected void setup() {
-        Path dataDirectory = getDataDirectory();
+        this.dataDirectory = getDataDirectory();
 
         this.tokensConfig = TokensConfig.load(dataDirectory.resolve("tokens.json"));
         this.enchantsConfig = EnchantsConfig.load(dataDirectory.resolve("enchants.json"));
@@ -55,11 +60,13 @@ public class HytaleFarmingPlugin extends JavaPlugin {
         this.tokenService = new TokenService(dataDirectory, tokensConfig, enchantsConfig);
         Debug.log("token service initialized");
 
-        Debug.log("Registering commands: /tokens, /tokenstop");
+        Debug.log("Registering commands: /tokens, /tokenstop, /farming");
         getCommandRegistry().registerCommand(new TokensCommandCollection(this));
         Debug.log("registered command: /tokens");
         getCommandRegistry().registerCommand(new TokenTopCommand(this));
         Debug.log("registered command: /tokenstop");
+        getCommandRegistry().registerCommand(new FarmingCommandCollection(this));
+        Debug.log("registered command: /farming");
 
         getCodecRegistry(Interaction.CODEC).register(
                 "thorium_hoe_upgrade_menu",
@@ -170,6 +177,73 @@ public class HytaleFarmingPlugin extends JavaPlugin {
                 Debug.log("[HoeDebug] failed to notify player about UI failure: " + ignored.getMessage());
             }
         }
+    }
+
+    public synchronized String reloadAllConfigs(String caller) {
+        List<String> loadedFiles = new ArrayList<>();
+        List<String> defaultsApplied = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+        List<String> warnings = new ArrayList<>();
+
+        Debug.log("[Reload] /farming reload invoked by caller=" + caller);
+
+        Path tokensPath = dataDirectory.resolve("tokens.json");
+        Path enchantsPath = dataDirectory.resolve("enchants.json");
+        Path uiPath = dataDirectory.resolve("config.json");
+
+        boolean tokensExistedBefore = Files.exists(tokensPath);
+        try {
+            TokensConfig newTokensConfig = TokensConfig.load(tokensPath);
+            this.tokensConfig = newTokensConfig;
+            loadedFiles.add("tokens.json");
+            if (!tokensExistedBefore) {
+                defaultsApplied.add("tokens.json");
+            }
+        } catch (Exception ex) {
+            errors.add("tokens.json: " + ex.getMessage());
+        }
+
+        boolean enchantsExistedBefore = Files.exists(enchantsPath);
+        try {
+            EnchantsConfig newEnchantsConfig = EnchantsConfig.load(enchantsPath);
+            this.enchantsConfig = newEnchantsConfig;
+            loadedFiles.add("enchants.json");
+            if (!enchantsExistedBefore) {
+                defaultsApplied.add("enchants.json");
+            }
+        } catch (Exception ex) {
+            errors.add("enchants.json: " + ex.getMessage());
+        }
+
+        boolean uiExistedBefore = Files.exists(uiPath);
+        try {
+            UiConfig newUiConfig = UiConfig.load(uiPath);
+            this.uiConfig = newUiConfig;
+            loadedFiles.add("config.json");
+            if (!uiExistedBefore) {
+                defaultsApplied.add("config.json");
+            }
+        } catch (Exception ex) {
+            errors.add("config.json: " + ex.getMessage());
+        }
+
+        Debug.configure(tokensConfig.isDebug(), getLogger());
+
+        this.tokenService = new TokenService(dataDirectory, tokensConfig, enchantsConfig);
+
+        if (tokensConfig.getTokensTimes() <= 0) {
+            warnings.add("tokensTimes <= 0 will disable token gains.");
+        }
+
+        Debug.log("[Reload] loadedFiles=" + loadedFiles + " defaultsApplied=" + defaultsApplied + " warnings=" + warnings + " errors=" + errors);
+
+        if (errors.isEmpty()) {
+            getLogger().atInfo().log("[HytaleFarming] /farming reload success loaded=" + loadedFiles + " defaultsApplied=" + defaultsApplied);
+            return "Reload successful. loaded=" + loadedFiles + " defaultsApplied=" + defaultsApplied + (warnings.isEmpty() ? "" : " warnings=" + warnings);
+        }
+
+        getLogger().atSevere().log("[HytaleFarming] /farming reload completed with errors. loaded=" + loadedFiles + " defaultsApplied=" + defaultsApplied + " errors=" + errors);
+        return "Reload completed with errors. loaded=" + loadedFiles + " defaultsApplied=" + defaultsApplied + " errors=" + errors + (warnings.isEmpty() ? "" : " warnings=" + warnings);
     }
 
     public static HytaleFarmingPlugin instance() {
