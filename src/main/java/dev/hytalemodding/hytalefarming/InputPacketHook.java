@@ -9,7 +9,6 @@ import com.hypixel.hytale.protocol.InteractionType;
 import com.hypixel.hytale.protocol.Packet;
 import com.hypixel.hytale.protocol.packets.interaction.SyncInteractionChain;
 import com.hypixel.hytale.protocol.packets.interaction.SyncInteractionChains;
-import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.io.adapter.PacketAdapters;
 import com.hypixel.hytale.server.core.io.adapter.PacketFilter;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
@@ -141,28 +140,22 @@ public class InputPacketHook {
                     return;
                 }
 
-                // Perform harvest break, then run exact same shared crop break/proc pipeline with cached data.
+                TokenFinderBreakBlockSystem.registerPendingUseHarvest(
+                        playerRef,
+                        target.getX(),
+                        target.getY(),
+                        target.getZ(),
+                        cachedHeldItemId,
+                        cachedBrokenBlockId
+                );
+
+                // Use real block break so engine/vanilla crop + essence drop logic executes.
                 boolean broke = world.breakBlock(target.getX(), target.getY(), target.getZ(), 0);
-                Debug.log("[HoeDebug] Use harvest execution player=" + playerRef.getUsername()
+                Debug.log("[Harvest] usingRealBreak=true source=UseHarvest player=" + playerRef.getUsername()
                         + " target=" + target.getX() + "," + target.getY() + "," + target.getZ()
                         + " cachedHeldItemId=" + cachedHeldItemId
                         + " cachedBrokenBlockId=" + cachedBrokenBlockId
                         + " breakResult=" + broke);
-
-                Player player = store.getComponent(ref, Player.getComponentType());
-                if (player == null) {
-                    Debug.log("[HoeDebug] Use harvest skipped reward pipeline: player component missing");
-                    return;
-                }
-
-                plugin.getTokenFinderBreakBlockSystem().handleCropBreakAndProcs(
-                        player,
-                        playerRef,
-                        cachedHeldItemId,
-                        cachedBrokenBlockId,
-                        target,
-                        "UseHarvest"
-                );
             } catch (Exception ex) {
                 Debug.log("[HoeDebug] Use harvest failed player=" + playerRef.getUsername()
                         + " target=" + target.getX() + "," + target.getY() + "," + target.getZ()

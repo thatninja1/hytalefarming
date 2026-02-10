@@ -29,7 +29,9 @@ import java.util.concurrent.ThreadLocalRandom;
 public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, BreakBlockEvent> {
 
     private static final long DEDUPE_WINDOW_MS = 250L;
+    private static final long PENDING_USE_WINDOW_MS = 1200L;
     private static final Map<String, Long> RECENT_HARVEST_REWARDS = new ConcurrentHashMap<>();
+    private static final Map<String, PendingUseHarvestContext> PENDING_USE_HARVESTS = new ConcurrentHashMap<>();
 
     private final HytaleFarmingPlugin plugin;
 
@@ -56,11 +58,29 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         }
 
         ItemStack inHand = event.getItemInHand();
-        String heldItemId = inHand == null ? "<none>" : inHand.getItemId();
+        String eventHeldItemId = inHand == null ? "<none>" : inHand.getItemId();
         String blockId = event.getBlockType() == null ? "<unknown>" : event.getBlockType().getId();
         Vector3i target = event.getTargetBlock();
 
-        handleCropBreakAndProcs(player, playerRef, heldItemId, blockId, target, "PrimaryBreak");
+        String resolvedHeldItemId = eventHeldItemId;
+        String source = "PrimaryBreak";
+
+        if (!"Tool_Hoe_Thorium".equals(eventHeldItemId) && target != null) {
+            PendingUseHarvestContext pending = consumePendingUseHarvest(playerRef, target.getX(), target.getY(), target.getZ());
+            if (pending != null) {
+                resolvedHeldItemId = pending.heldItemId();
+                source = "UseHarvest";
+                if (pending.cachedBlockId() != null && !pending.cachedBlockId().isBlank()) {
+                    blockId = pending.cachedBlockId();
+                }
+                Debug.log("[Harvest] consumed pending Use context player=" + playerRef.getUsername()
+                        + " heldItemId=" + resolvedHeldItemId
+                        + " cachedBlockId=" + blockId
+                        + " ageMs=" + (System.currentTimeMillis() - pending.createdAtMs()));
+            }
+        }
+
+        handleCropBreakAndProcs(player, playerRef, resolvedHeldItemId, blockId, target, source);
     }
 
     public void handleCropBreakAndProcs(Player player,
@@ -87,6 +107,12 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         if (!validHarvestable) {
             Debug.log("[CropBreak] source=" + source + " rejected reason=not_valid_fully_grown_crop blockId=" + normalizedBlockId);
             return;
+        }
+
+        if ("UseHarvest".equals(source)) {
+            Debug.log("[Harvest] usingRealBreak=true source=UseHarvest");
+            Debug.log("[Harvest] vanillaDropsCaptured=unknown source=UseHarvest");
+            Debug.log("[Harvest] vanillaEssenceCaptured=unknown source=UseHarvest");
         }
 
         int blockX = blockPos == null ? 0 : blockPos.getX();
@@ -266,6 +292,29 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         return allowed;
     }
 
+    public static void registerPendingUseHarvest(PlayerRef playerRef, int x, int y, int z, String heldItemId, String cachedBlockId) {
+        String key = playerRef.getUuid() + ":" + x + ":" + y + ":" + z;
+        PENDING_USE_HARVESTS.put(key, new PendingUseHarvestContext(heldItemId, cachedBlockId, System.currentTimeMillis()));
+        Debug.log("[Harvest] registered pending Use context player=" + playerRef.getUsername() + " key=" + key
+                + " heldItemId=" + heldItemId + " cachedBlockId=" + cachedBlockId);
+    }
+
+    private static PendingUseHarvestContext consumePendingUseHarvest(PlayerRef playerRef, int x, int y, int z) {
+        String key = playerRef.getUuid() + ":" + x + ":" + y + ":" + z;
+        PendingUseHarvestContext context = PENDING_USE_HARVESTS.remove(key);
+        if (context == null) {
+            return null;
+        }
+
+        long age = System.currentTimeMillis() - context.createdAtMs();
+        if (age > PENDING_USE_WINDOW_MS) {
+            Debug.log("[Harvest] pending Use context expired key=" + key + " ageMs=" + age);
+            return null;
+        }
+
+        return context;
+    }
+
     private String extractCropKey(String blockId) {
         if (blockId == null) {
             return null;
@@ -294,5 +343,8 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
     @Override
     public Query<EntityStore> getQuery() {
         return Archetype.of(Player.getComponentType());
+    }
+
+    private record PendingUseHarvestContext(String heldItemId, String cachedBlockId, long createdAtMs) {
     }
 }
