@@ -30,10 +30,11 @@ Behavior:
 ## Config files
 
 ### `config.json`
-UI text is editable:
+UI text and debug toggle are editable:
 
 ```json
 {
+  "debug": true,
   "ui": {
     "title": "Ninja Farming",
     "subtitle": "Upgrade your Thorium Hoe"
@@ -41,11 +42,20 @@ UI text is editable:
 }
 ```
 
+`debug` behavior:
+- All plugin debug traces (`[HoeDebug]`, `[Harvest]`, `[CropBreak]`, `[EnchantProc]`, `[Drops]`, etc.) are gated by the debug flag.
+- If `debug=false`, those debug traces are suppressed.
+- Warnings/errors still log.
+
 ### `enchants.json`
 Each enchant uses:
 - `maxLevel`
 - `baseUpgradeCost`
 - `enchantProc` (proc value from config)
+- `procMessage` (chat message template used when that enchant procs)
+
+`tokenFinder` also supports:
+- `defaultLevel` (applies only when player has no saved token finder level yet)
 
 Unified proc rule for all enchants (`token_finder`, `fortune`, `keyfinder`, future):
 - If `enchantProc >= 1.0` => computed chance `1.0` (always proc)
@@ -61,14 +71,29 @@ Debug logs for valid harvests include:
 - roll
 - procResult
 
-Keyfinder config keeps:
+Example:
 
 ```json
 {
+  "tokenFinder": {
+    "maxLevel": 10,
+    "baseUpgradeCost": 10,
+    "defaultLevel": 1,
+    "enchantProc": 1.0,
+    "procMessage": "#808080+{amount} {currency} (#FFD700{enchant}#808080)"
+  },
+  "fortune": {
+    "maxLevel": 5,
+    "baseUpgradeCost": 20,
+    "upgradeCostIncrease": 100,
+    "enchantProc": 1.0,
+    "procMessage": "#80FF80Fortune proc! +{extra} crops"
+  },
   "keyfinder": {
     "maxLevel": 100,
     "baseUpgradeCost": 50,
     "enchantProc": 1.0,
+    "procMessage": "#00FFFFKeyfinder! You found a key: {crateId}",
     "crates": [
       {
         "crateId": "Crate1",
@@ -80,7 +105,25 @@ Keyfinder config keeps:
 }
 ```
 
-`{player}` -> player username, `<crateid>` -> selected crate id.
+`{player}` -> player username, `<crateid>` -> selected crate id in the configured command.
+
+`procMessage` placeholders:
+- `{amount}`: token amount awarded (Token Finder)
+- `{currency}`: configured currency name
+- `{enchant}`: enchant display name (Token Finder / Fortune / Keyfinder)
+- `{level}`: current enchant level
+- `{crateId}`: selected keyfinder crate id
+- `{extra}`: extra crop amount from Fortune
+
+### Hex colors in proc messages
+- Hex markers in `#RRGGBB` format are accepted in templates.
+- Current server chat path does **not** support hex formatting directly, so hex markers are stripped before sending.
+- Plugin logs this warning once on startup: `Hex chat colors not supported; stripping codes.`
+
+### Token Finder default level behavior
+- New players are initialized with `token_finder = tokenFinder.defaultLevel`.
+- Existing players keep their stored level.
+- Migration case is supported: if a player exists in data but `token_finder` key is missing, the default is applied once.
 
 ## Harvest behavior
 - Valid crop detection remains:

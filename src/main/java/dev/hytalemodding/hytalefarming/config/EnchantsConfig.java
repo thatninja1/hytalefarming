@@ -48,6 +48,8 @@ public class EnchantsConfig {
         private int maxLevel = 10;
         private int baseUpgradeCost = 10;
         private float enchantProc = 1.0f;
+        private int defaultLevel = 1;
+        private String procMessage = "#808080+{amount} {currency} (#FFD700{enchant}#808080)";
 
         public int getMaxLevel() {
             return Math.max(1, maxLevel);
@@ -60,6 +62,16 @@ public class EnchantsConfig {
         public double getEnchantProc() {
             return Math.max(0.0D, Math.min(1.0D, enchantProc));
         }
+
+        public int getDefaultLevel() {
+            return Math.max(0, Math.min(getMaxLevel(), defaultLevel));
+        }
+
+        public String getProcMessage() {
+            return procMessage == null || procMessage.isBlank()
+                    ? "+{amount} {currency} ({enchant})"
+                    : procMessage;
+        }
     }
 
     public static class Fortune {
@@ -67,6 +79,7 @@ public class EnchantsConfig {
         private int baseUpgradeCost = 20;
         private int upgradeCostIncrease = 100;
         private float enchantProc = 1.0f;
+        private String procMessage = "#80FF80Fortune proc! +{extra} crops";
 
         public int getMaxLevel() {
             return Math.max(1, maxLevel);
@@ -79,12 +92,19 @@ public class EnchantsConfig {
         public double getEnchantProc() {
             return Math.max(0.0D, Math.min(1.0D, enchantProc));
         }
+
+        public String getProcMessage() {
+            return procMessage == null || procMessage.isBlank()
+                    ? "{enchant} proc! +{extra}"
+                    : procMessage;
+        }
     }
 
     public static class Keyfinder {
         private int maxLevel = 100;
         private int baseUpgradeCost = 50;
         private float enchantProc = 1.0f;
+        private String procMessage = "#00FFFFKeyfinder! You found a key: {crateId}";
         private List<Crate> crates = List.of(
                 new Crate("Crate1", "/crates givekey {player} Crate1", 0.5f),
                 new Crate("Crate2", "/crates givekey {player} Crate2", 0.5f)
@@ -100,6 +120,12 @@ public class EnchantsConfig {
 
         public double getEnchantProc() {
             return Math.max(0.0D, Math.min(1.0D, enchantProc));
+        }
+
+        public String getProcMessage() {
+            return procMessage == null || procMessage.isBlank()
+                    ? "{enchant} proc! {crateId}"
+                    : procMessage;
         }
 
         public List<Crate> getCrates() {

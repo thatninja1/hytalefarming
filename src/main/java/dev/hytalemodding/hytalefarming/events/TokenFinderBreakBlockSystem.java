@@ -19,6 +19,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.hytalemodding.hytalefarming.Debug;
 import dev.hytalemodding.hytalefarming.HytaleFarmingPlugin;
 import dev.hytalemodding.hytalefarming.config.EnchantsConfig;
+import dev.hytalemodding.hytalefarming.util.MessageFormatter;
 
 import javax.annotation.Nonnull;
 import java.util.List;
@@ -153,7 +154,18 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         }
 
         plugin.getTokenService().addTokens(playerRef.getUuid(), playerRef.getUsername(), awarded);
-        player.sendMessage(Message.raw("+" + awarded + " " + plugin.getTokensConfig().getCurrencyName() + " (Token Finder)"));
+
+        String procMessage = MessageFormatter.format(cfg.getProcMessage(), Map.of(
+                "amount", String.valueOf(awarded),
+                "currency", plugin.getTokensConfig().getCurrencyName(),
+                "enchant", "Token Finder",
+                "level", String.valueOf(level),
+                "crateId", "",
+                "extra", ""
+        ));
+        if (!procMessage.isBlank()) {
+            player.sendMessage(Message.raw(procMessage));
+        }
     }
 
     private void processFortune(Player player, String blockId, int level, String source) {
@@ -183,7 +195,17 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         Debug.log("[Fortune] source=" + source + " blockId=" + blockId + " cropItem=" + itemId + " extraAmount=" + extraAmount + " grantSucceeded=" + success);
 
         if (success) {
-            player.sendMessage(Message.raw("+" + extraAmount + " " + itemId + " (Fortune)"));
+            String procMessage = MessageFormatter.format(cfg.getProcMessage(), Map.of(
+                    "amount", "",
+                    "currency", plugin.getTokensConfig().getCurrencyName(),
+                    "enchant", "Fortune",
+                    "level", String.valueOf(level),
+                    "crateId", "",
+                    "extra", String.valueOf(extraAmount)
+            ));
+            if (!procMessage.isBlank()) {
+                player.sendMessage(Message.raw(procMessage));
+            }
         }
     }
 
@@ -196,7 +218,7 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
 
         EnchantsConfig.Crate chosenCrate = chooseCrate(cfg.getCrates());
         if (chosenCrate == null) {
-            Debug.log("[Keyfinder] source=" + source + " warning: proc succeeded but crate config is invalid; no command executed");
+            Debug.warn("[Keyfinder] source=" + source + " proc succeeded but crate config is invalid; no command executed");
             return;
         }
 
@@ -207,11 +229,23 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         String normalizedCommand = finalCommand.startsWith("/") ? finalCommand.substring(1) : finalCommand;
         Debug.log("Keyfinder proc success -> source=" + source + " selected crateId=" + chosenCrate.getCrateId() + " command=" + normalizedCommand);
         CommandManager.get().handleCommand(player, normalizedCommand);
+
+        String procMessage = MessageFormatter.format(cfg.getProcMessage(), Map.of(
+                "amount", "",
+                "currency", plugin.getTokensConfig().getCurrencyName(),
+                "enchant", "Keyfinder",
+                "level", String.valueOf(level),
+                "crateId", chosenCrate.getCrateId(),
+                "extra", ""
+        ));
+        if (!procMessage.isBlank()) {
+            player.sendMessage(Message.raw(procMessage));
+        }
     }
 
     private EnchantsConfig.Crate chooseCrate(List<EnchantsConfig.Crate> crates) {
         if (crates == null || crates.isEmpty()) {
-            Debug.log("[Keyfinder] warning: no crates configured; no command executed");
+            Debug.warn("[Keyfinder] no crates configured; no command executed");
             return null;
         }
 
@@ -221,7 +255,7 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         }
 
         if (totalWeight <= 0D) {
-            Debug.log("[Keyfinder] warning: all crate_chance weights are <= 0; no command executed");
+            Debug.warn("[Keyfinder] all crate_chance weights are <= 0; no command executed");
             return null;
         }
 

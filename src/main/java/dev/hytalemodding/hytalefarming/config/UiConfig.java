@@ -12,6 +12,7 @@ public class UiConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private UiSection ui = new UiSection();
+    private boolean debug = true;
 
     public static UiConfig load(Path path) {
         try {
@@ -42,6 +43,10 @@ public class UiConfig {
 
     public String getUiSubtitle() {
         return ui == null ? new UiSection().getSubtitle() : ui.getSubtitle();
+    }
+
+    public boolean isDebug() {
+        return debug;
     }
 
     public static class UiSection {

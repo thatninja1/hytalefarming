@@ -20,6 +20,7 @@ import dev.hytalemodding.hytalefarming.events.TokenFinderBreakBlockSystem;
 import dev.hytalemodding.hytalefarming.interaction.HoeUpgradeMenuInteraction;
 import dev.hytalemodding.hytalefarming.service.TokenService;
 import dev.hytalemodding.hytalefarming.ui.ThoriumHoeUpgradePage;
+import dev.hytalemodding.hytalefarming.util.MessageFormatter;
 
 import javax.annotation.Nonnull;
 import java.nio.file.Files;
@@ -51,7 +52,7 @@ public class HytaleFarmingPlugin extends JavaPlugin {
         this.enchantsConfig = EnchantsConfig.load(dataDirectory.resolve("enchants.json"));
         this.uiConfig = UiConfig.load(dataDirectory.resolve("config.json"));
 
-        Debug.configure(tokensConfig.isDebug(), getLogger());
+        Debug.configure(tokensConfig.isDebug() && uiConfig.isDebug(), getLogger());
         Debug.log("setup() start");
         Debug.log("config loaded: currencyName=" + tokensConfig.getCurrencyName()
                 + ", tokensTimes=" + tokensConfig.getTokensTimes()
@@ -59,6 +60,11 @@ public class HytaleFarmingPlugin extends JavaPlugin {
         Debug.log("ui config loaded: title=\"" + uiConfig.getUiTitle() + "\" subtitle=\"" + uiConfig.getUiSubtitle() + "\"");
 
         this.tokenService = new TokenService(dataDirectory, tokensConfig, enchantsConfig);
+        MessageFormatter.logHexSupportAtStartupIfNeeded(
+                enchantsConfig.getTokenFinder().getProcMessage(),
+                enchantsConfig.getFortune().getProcMessage(),
+                enchantsConfig.getKeyfinder().getProcMessage()
+        );
         Debug.log("token service initialized");
 
         Debug.log("Registering commands: /tokens, /tokenstop, /farming");
@@ -161,7 +167,6 @@ public class HytaleFarmingPlugin extends JavaPlugin {
             int tokenFinderLevel = tokenService.enchantLevel(playerRef.getUuid(), playerRef.getUsername(), "token_finder");
             Debug.log("[HoeDebug] tokenBalance=" + tokenBalance + " tokenFinderLevel=" + tokenFinderLevel);
 
-            player.sendMessage(Message.raw("[HoeDebug] Thorium hoe detected -> opening UI"));
             player.getPageManager().openCustomPage(ref, store, new ThoriumHoeUpgradePage(playerRef));
             Debug.log("[HoeDebug] UI open invoked successfully for player=" + playerRef.getUsername());
         } catch (Exception ex) {
@@ -229,9 +234,14 @@ public class HytaleFarmingPlugin extends JavaPlugin {
             errors.add("config.json: " + ex.getMessage());
         }
 
-        Debug.configure(tokensConfig.isDebug(), getLogger());
+        Debug.configure(tokensConfig.isDebug() && uiConfig.isDebug(), getLogger());
 
         this.tokenService = new TokenService(dataDirectory, tokensConfig, enchantsConfig);
+        MessageFormatter.logHexSupportAtStartupIfNeeded(
+                enchantsConfig.getTokenFinder().getProcMessage(),
+                enchantsConfig.getFortune().getProcMessage(),
+                enchantsConfig.getKeyfinder().getProcMessage()
+        );
 
         if (tokensConfig.getTokensTimes() <= 0) {
             warnings.add("tokensTimes <= 0 will disable token gains.");

@@ -3,7 +3,6 @@ package dev.hytalemodding.hytalefarming.interaction;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
 import com.hypixel.hytale.component.CommandBuffer;
 import com.hypixel.hytale.component.Ref;
-import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.InteractionContext;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.CooldownHandler;
@@ -47,7 +46,6 @@ public class HoeUpgradeMenuInteraction extends SimpleInstantInteraction {
         }
 
         if (interactionType == InteractionType.Secondary && "Tool_Hoe_Thorium".equals(heldItem)) {
-            player.sendMessage(Message.raw("Thorium hoe right-click detected (debug)."));
             PlayerRef playerRef = commandBuffer.getComponent(ref, PlayerRef.getComponentType());
             if (playerRef == null) {
                 Debug.log("Failed to open UI: PlayerRef component missing");

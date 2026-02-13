@@ -37,7 +37,11 @@ public class TokenService {
     }
 
     public synchronized int enchantLevel(UUID playerId, String playerName, String enchantKey) {
-        return account(playerId, playerName).data.getEnchantLevel(enchantKey);
+        PlayerAccount account = account(playerId, playerName);
+        if (ensureDefaultEnchantLevels(account)) {
+            save();
+        }
+        return account.data.getEnchantLevel(enchantKey);
     }
 
     public synchronized void addTokens(UUID playerId, String playerName, long amount) {
@@ -105,14 +109,31 @@ public class TokenService {
         PlayerAccount existing = database.players.get(id.toString());
         if (existing != null) {
             existing.playerName = name;
+            if (ensureDefaultEnchantLevels(existing)) {
+                save();
+            }
             return existing;
         }
         PlayerAccount created = new PlayerAccount();
         created.playerId = id;
         created.playerName = name;
         created.data = new PlayerTokenData();
+        ensureDefaultEnchantLevels(created);
         database.players.put(id.toString(), created);
         return created;
+    }
+
+    private boolean ensureDefaultEnchantLevels(PlayerAccount account) {
+        if (account == null || account.data == null) {
+            return false;
+        }
+
+        if (!account.data.getEnchants().containsKey("token_finder")) {
+            account.data.setEnchantLevel("token_finder", enchantsConfig.getTokenFinder().getDefaultLevel());
+            return true;
+        }
+
+        return false;
     }
 
     private Database load() {
