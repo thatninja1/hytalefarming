@@ -35,9 +35,11 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
 
     private static final long DEDUPE_WINDOW_MS = 250L;
     private static final long PENDING_USE_WINDOW_MS = 1200L;
+    private static final long PENDING_PRIMARY_WINDOW_MS = 350L;
     private static final long RADIUS_LOG_WINDOW_MS = 600L;
     private static final Map<String, Long> RECENT_HARVEST_REWARDS = new ConcurrentHashMap<>();
     private static final Map<String, PendingUseHarvestContext> PENDING_USE_HARVESTS = new ConcurrentHashMap<>();
+    private static final Map<String, PendingPrimaryHarvestContext> PENDING_PRIMARY_HARVESTS = new ConcurrentHashMap<>();
     private static final Map<String, Long> RECENT_BREAK_EVENTS = new ConcurrentHashMap<>();
     private static final Map<String, RadiusProcStats> RADIUS_PROC_STATS = new ConcurrentHashMap<>();
 
@@ -92,6 +94,15 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
             }
         }
 
+        if (!FarmingTools.isValidFarmingTool(resolvedHeldItemId)) {
+            PendingPrimaryHarvestContext primaryPending = consumePendingPrimarySickleHarvest(playerRef, target);
+            if (primaryPending != null) {
+                resolvedHeldItemId = primaryPending.heldItemId();
+                source = "PrimarySickleContextApplied";
+                Debug.log("[CropBreak] source=" + source + " usedCachedContext=true cachedHeldItemId=" + resolvedHeldItemId
+                        + " ageMs=" + (System.currentTimeMillis() - primaryPending.createdAtMs()));
+            }
+        }
 
         moveDropsToInventoryIfPossible(event, player, source, blockId);
         handleCropBreakAndProcs(player, playerRef, resolvedHeldItemId, blockId, target, source);
@@ -344,6 +355,13 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         return allowed;
     }
 
+    public static void registerPendingPrimarySickleHarvest(PlayerRef playerRef, int x, int y, int z, String heldItemId) {
+        String key = playerRef.getUuid().toString();
+        PENDING_PRIMARY_HARVESTS.put(key, new PendingPrimaryHarvestContext(heldItemId, x, y, z, System.currentTimeMillis()));
+        Debug.log("[Harvest] registered pending Primary context player=" + playerRef.getUsername() + " key=" + key
+                + " heldItemId=" + heldItemId + " target=" + x + "," + y + "," + z + " windowMs=" + PENDING_PRIMARY_WINDOW_MS);
+    }
+
     public static void registerPendingUseHarvest(PlayerRef playerRef, int x, int y, int z, String heldItemId, String cachedBlockId) {
         String key = playerRef.getUuid() + ":" + x + ":" + y + ":" + z;
         PENDING_USE_HARVESTS.put(key, new PendingUseHarvestContext(heldItemId, cachedBlockId, System.currentTimeMillis()));
@@ -367,6 +385,31 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         return context;
     }
 
+
+    private static PendingPrimaryHarvestContext consumePendingPrimarySickleHarvest(PlayerRef playerRef, Vector3i target) {
+        String key = playerRef.getUuid().toString();
+        PendingPrimaryHarvestContext context = PENDING_PRIMARY_HARVESTS.get(key);
+        if (context == null) {
+            return null;
+        }
+
+        long age = System.currentTimeMillis() - context.createdAtMs();
+        if (age > PENDING_PRIMARY_WINDOW_MS) {
+            PENDING_PRIMARY_HARVESTS.remove(key);
+            return null;
+        }
+
+        if (target != null && context.x() != 0 && context.y() != 0 && context.z() != 0) {
+            int dx = Math.abs(target.getX() - context.x());
+            int dy = Math.abs(target.getY() - context.y());
+            int dz = Math.abs(target.getZ() - context.z());
+            if (dx > 5 || dy > 2 || dz > 5) {
+                return null;
+            }
+        }
+
+        return context;
+    }
 
     public static void markBreakEventObserved(PlayerRef playerRef, int x, int y, int z, String source) {
         String key = playerRef.getUuid() + ":" + x + ":" + y + ":" + z;
@@ -488,6 +531,9 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
     }
 
     private record PendingUseHarvestContext(String heldItemId, String cachedBlockId, long createdAtMs) {
+    }
+
+    private record PendingPrimaryHarvestContext(String heldItemId, int x, int y, int z, long createdAtMs) {
     }
 
     private static final class RadiusProcStats {

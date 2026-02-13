@@ -16,6 +16,7 @@ The plugin treats these item IDs as valid farming tools:
 ## Interaction behavior
 - `Secondary` opens the upgrade UI (only for supported sickles).
 - `Use` (F) and `Primary` are harvest/proc paths and do **not** open UI.
+- Primary with a supported sickle caches short-lived context so subsequent engine AOE `BreakBlockEvent`s can still be attributed to the sickle when event hand-item metadata is null.
 
 ## Commands
 - `/tokens bal` (self)
@@ -74,6 +75,7 @@ Each enchant supports:
 ## Proc and crop rules
 - Proc logic runs only for fully-grown crop blocks (`State_Definitions_StageFinal`).
 - Radius harvesting procs are per-block (independent rolls per crop block).
+- Debug includes radius summary windows such as `processed=X fullyGrown=Y procs=Z`.
 - In mixed-radius harvests, only fully-grown crops are eligible.
 
 ## Drop handling
