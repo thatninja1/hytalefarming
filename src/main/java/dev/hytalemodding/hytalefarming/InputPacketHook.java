@@ -20,6 +20,8 @@ import dev.hytalemodding.hytalefarming.util.FarmingTools;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -29,7 +31,6 @@ import java.util.concurrent.TimeUnit;
 
 public class InputPacketHook {
     private static final long BREAK_OBSERVE_DELAY_MS = 100L;
-    private static final long PRIMARY_VERIFY_DELAY_MS = 100L;
 
     private final HytaleFarmingPlugin plugin;
     private final Map<UUID, Integer> packetCounts = new ConcurrentHashMap<>();
@@ -157,41 +158,57 @@ public class InputPacketHook {
             Debug.log("[Harvest] source=PrimarySickleHarvest interactionType=" + interactionType + " snapshotCount=" + area.size()
                     + " fullyGrownCount=" + snapshotFullyGrown.size() + " player=" + playerRef.getUsername());
 
-            postUseVerifier.schedule(() -> world.execute(() -> {
-                int harvestedDetected = 0;
-                int invoked = 0;
+            Set<Vector3i> processed = new HashSet<>();
+            long[] delays = new long[]{100L, 200L, 350L};
 
-                for (Map.Entry<Vector3i, String> entry : snapshotFullyGrown.entrySet()) {
-                    Vector3i pos = entry.getKey();
-                    String beforeBlockId = entry.getValue();
+            for (int i = 0; i < delays.length; i++) {
+                final int passIndex = i + 1;
+                final long delayMs = delays[i];
 
-                    String afterBlockId = "<unknown>";
-                    if (world.getBlockType(pos.getX(), pos.getY(), pos.getZ()) != null) {
-                        afterBlockId = TokenFinderBreakBlockSystem.normalizeBlockId(world.getBlockType(pos.getX(), pos.getY(), pos.getZ()).getId());
+                postUseVerifier.schedule(() -> world.execute(() -> {
+                    int harvestedDetected = 0;
+                    int invoked = 0;
+
+                    for (Map.Entry<Vector3i, String> entry : snapshotFullyGrown.entrySet()) {
+                        Vector3i pos = entry.getKey();
+                        if (processed.contains(pos)) {
+                            continue;
+                        }
+
+                        String beforeBlockId = entry.getValue();
+                        String afterBlockId = "<unknown>";
+                        if (world.getBlockType(pos.getX(), pos.getY(), pos.getZ()) != null) {
+                            afterBlockId = TokenFinderBreakBlockSystem.normalizeBlockId(world.getBlockType(pos.getX(), pos.getY(), pos.getZ()).getId());
+                        }
+
+                        boolean stillFullyGrown = TokenFinderBreakBlockSystem.isValidHarvestableCrop(afterBlockId);
+                        if (stillFullyGrown) {
+                            continue;
+                        }
+
+                        harvestedDetected++;
+                        processed.add(pos);
+                        plugin.getTokenFinderBreakBlockSystem().handleCropBreakAndProcs(
+                                player,
+                                playerRef,
+                                heldItemId,
+                                beforeBlockId,
+                                pos,
+                                "PrimarySickleHarvest"
+                        );
+                        invoked++;
                     }
 
-                    boolean stillFullyGrown = TokenFinderBreakBlockSystem.isValidHarvestableCrop(afterBlockId);
-                    if (stillFullyGrown) {
-                        continue;
-                    }
-
-                    harvestedDetected++;
-                    plugin.getTokenFinderBreakBlockSystem().handleCropBreakAndProcs(
-                            player,
-                            playerRef,
-                            heldItemId,
-                            beforeBlockId,
-                            pos,
-                            "PrimarySickleHarvest"
-                    );
-                    invoked++;
-                }
-
-                Debug.log("[Harvest] source=PrimarySickleHarvest interactionType=" + interactionType
-                        + " harvestedDetectedCount=" + harvestedDetected
-                        + " procInvocationCount=" + invoked
-                        + " player=" + playerRef.getUsername());
-            }), PRIMARY_VERIFY_DELAY_MS, TimeUnit.MILLISECONDS);
+                    int remainingUnchanged = Math.max(0, snapshotFullyGrown.size() - processed.size());
+                    Debug.log("[Harvest] source=PrimarySickleHarvest interactionType=" + interactionType
+                            + " pass=" + passIndex
+                            + " delayMs=" + delayMs
+                            + " harvestedDetectedCount=" + harvestedDetected
+                            + " procInvocationCount=" + invoked
+                            + " remainingUnchangedCount=" + remainingUnchanged
+                            + " player=" + playerRef.getUsername());
+                }), delayMs, TimeUnit.MILLISECONDS);
+            }
         });
     }
 
