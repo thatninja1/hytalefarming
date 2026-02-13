@@ -1,10 +1,10 @@
 {
-  "Id": "Tool_Hoe_Thorium",
+  "Id": "Tool_Sickle_Cobalt",
   "Interactions": {
     "Secondary": {
       "Interactions": [
         {
-          "Type": "thorium_hoe_upgrade_menu"
+          "Type": "farming_tool_upgrade_menu"
         }
       ]
     }

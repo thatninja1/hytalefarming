@@ -16,6 +16,7 @@ import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.hytalemodding.hytalefarming.events.TokenFinderBreakBlockSystem;
+import dev.hytalemodding.hytalefarming.util.FarmingTools;
 
 import java.util.Map;
 import java.util.UUID;
@@ -51,7 +52,7 @@ public class InputPacketHook {
 
                 InteractionType type = update.interactionType;
                 String heldItemId = update.itemInHandId == null ? "<null>" : update.itemInHandId;
-                Debug.log("[HoeDebug] SyncInteractionChains: player=" + playerRef.getUsername() + " type=" + type + " heldItemId=" + heldItemId);
+                Debug.log("[FarmingDebug] SyncInteractionChains: player=" + playerRef.getUsername() + " type=" + type + " heldItemId=" + heldItemId);
 
                 if (type == InteractionType.Secondary) {
                     handleSecondary(playerRef, heldItemId);
@@ -63,7 +64,7 @@ public class InputPacketHook {
                     continue;
                 }
 
-                Debug.log("[HoeDebug] ignored interaction type=" + type + " player=" + playerRef.getUsername() + " heldItemId=" + heldItemId + " reason=unsupported_type");
+                Debug.log("[FarmingDebug] ignored interaction type=" + type + " player=" + playerRef.getUsername() + " heldItemId=" + heldItemId + " reason=unsupported_type");
             }
         });
 
@@ -77,7 +78,7 @@ public class InputPacketHook {
                 return;
             }
             for (Map.Entry<UUID, Integer> e : packetCounts.entrySet()) {
-                Debug.log("[HoeDebug] packetCounter playerUuid=" + e.getKey() + " packetsInLastWindow=" + e.getValue());
+                Debug.log("[FarmingDebug] packetCounter playerUuid=" + e.getKey() + " packetsInLastWindow=" + e.getValue());
             }
             packetCounts.clear();
         }, 3, 3, TimeUnit.SECONDS);
@@ -88,27 +89,27 @@ public class InputPacketHook {
     }
 
     private void handleSecondary(PlayerRef playerRef, String heldItemId) {
-        if (!"Tool_Hoe_Thorium".equals(heldItemId)) {
-            Debug.log("[HoeDebug] ignored interaction type=Secondary player=" + playerRef.getUsername()
-                    + " heldItemId=" + heldItemId + " reason=non_thorium_hoe");
+        if (!FarmingTools.isValidFarmingTool(heldItemId)) {
+            Debug.log("[FarmingDebug] ignored interaction type=Secondary player=" + playerRef.getUsername()
+                    + " heldItemId=" + heldItemId + " reason=not_farming_sickle");
             return;
         }
 
-        Debug.log("[HoeDebug] accepted interaction type=Secondary player=" + playerRef.getUsername()
+        Debug.log("[FarmingDebug] accepted interaction type=Secondary player=" + playerRef.getUsername()
                 + " heldItemId=" + heldItemId + " -> opening UI");
         plugin.openUpgradeUiSafe(playerRef, null, InteractionType.Secondary.name(), heldItemId);
     }
 
     private void handleUseHarvest(PlayerRef playerRef, String heldItemId, SyncInteractionChain update) {
-        if (!"Tool_Hoe_Thorium".equals(heldItemId)) {
-            Debug.log("[HoeDebug] ignored interaction type=Use player=" + playerRef.getUsername()
-                    + " heldItemId=" + heldItemId + " reason=non_thorium_hoe");
+        if (!FarmingTools.isValidFarmingTool(heldItemId)) {
+            Debug.log("[FarmingDebug] ignored interaction type=Use player=" + playerRef.getUsername()
+                    + " heldItemId=" + heldItemId + " reason=not_farming_sickle");
             return;
         }
 
         Ref<EntityStore> ref = playerRef.getReference();
         if (ref == null || !ref.isValid()) {
-            Debug.log("[HoeDebug] ignored interaction type=Use player=" + playerRef.getUsername() + " reason=invalid_player_ref");
+            Debug.log("[FarmingDebug] ignored interaction type=Use player=" + playerRef.getUsername() + " reason=invalid_player_ref");
             return;
         }
 
@@ -118,7 +119,7 @@ public class InputPacketHook {
 
         Vector3i target = resolveTargetBlock(update);
         if (target == null) {
-            Debug.log("[HoeDebug] ignored interaction type=Use player=" + playerRef.getUsername()
+            Debug.log("[FarmingDebug] ignored interaction type=Use player=" + playerRef.getUsername()
                     + " heldItemId=" + heldItemId + " reason=no_target_block");
             return;
         }
@@ -134,14 +135,14 @@ public class InputPacketHook {
                 String cachedBrokenBlockId = blockIdBefore;
 
                 boolean harvestable = TokenFinderBreakBlockSystem.isValidHarvestableCrop(cachedBrokenBlockId);
-                Debug.log("[HoeDebug] interaction type=Use player=" + playerRef.getUsername()
+                Debug.log("[FarmingDebug] interaction type=Use player=" + playerRef.getUsername()
                         + " heldItemId=" + cachedHeldItemId
                         + " target=" + target.getX() + "," + target.getY() + "," + target.getZ()
                         + " targetBlockId=" + cachedBrokenBlockId
                         + " treatedAsHarvest=" + harvestable);
 
                 if (!harvestable) {
-                    Debug.log("[HoeDebug] ignored interaction type=Use player=" + playerRef.getUsername()
+                    Debug.log("[FarmingDebug] ignored interaction type=Use player=" + playerRef.getUsername()
                             + " heldItemId=" + cachedHeldItemId + " reason=target_not_valid_fully_grown_crop blockId=" + cachedBrokenBlockId);
                     return;
                 }
@@ -151,7 +152,7 @@ public class InputPacketHook {
                         target.getX(),
                         target.getY(),
                         target.getZ(),
-                        cachedHeldItemId,
+                        heldItemId,
                         cachedBrokenBlockId
                 );
 
@@ -214,7 +215,7 @@ public class InputPacketHook {
                     );
                 }), BREAK_OBSERVE_DELAY_MS, TimeUnit.MILLISECONDS);
             } catch (Exception ex) {
-                Debug.log("[HoeDebug] Use harvest failed player=" + playerRef.getUsername()
+                Debug.log("[FarmingDebug] Use harvest failed player=" + playerRef.getUsername()
                         + " target=" + target.getX() + "," + target.getY() + "," + target.getZ()
                         + " blockId=" + blockIdBefore + " error=" + ex.getMessage());
             }

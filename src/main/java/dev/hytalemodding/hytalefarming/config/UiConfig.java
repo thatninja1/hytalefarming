@@ -51,14 +51,14 @@ public class UiConfig {
 
     public static class UiSection {
         private String title = "Ninja Farming";
-        private String subtitle = "Upgrade your Thorium Hoe";
+        private String subtitle = "Upgrade your Farming Tool";
 
         public String getTitle() {
             return title == null || title.isBlank() ? "Ninja Farming" : title;
         }
 
         public String getSubtitle() {
-            return subtitle == null || subtitle.isBlank() ? "Upgrade your Thorium Hoe" : subtitle;
+            return subtitle == null || subtitle.isBlank() ? "Upgrade your Farming Tool" : subtitle;
         }
     }
 }

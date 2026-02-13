@@ -12,6 +12,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hypixel.hytale.protocol.InteractionType;
 import dev.hytalemodding.hytalefarming.Debug;
 import dev.hytalemodding.hytalefarming.ui.ThoriumHoeUpgradePage;
+import dev.hytalemodding.hytalefarming.util.FarmingTools;
 
 import javax.annotation.Nonnull;
 
@@ -45,16 +46,16 @@ public class HoeUpgradeMenuInteraction extends SimpleInstantInteraction {
             return;
         }
 
-        if (interactionType == InteractionType.Secondary && "Tool_Hoe_Thorium".equals(heldItem)) {
+        if (interactionType == InteractionType.Secondary && FarmingTools.isValidFarmingTool(heldItem)) {
             PlayerRef playerRef = commandBuffer.getComponent(ref, PlayerRef.getComponentType());
             if (playerRef == null) {
                 Debug.log("Failed to open UI: PlayerRef component missing");
                 return;
             }
             player.getPageManager().openCustomPage(ref, commandBuffer.getStore(), new ThoriumHoeUpgradePage(playerRef));
-            Debug.log("Detected Secondary right-click with Tool_Hoe_Thorium - opened upgrade UI");
+            Debug.log("Detected Secondary right-click with Farming sickle - opened upgrade UI");
         } else {
-            Debug.log("Interaction did not match secondary thorium hoe requirement");
+            Debug.log("Interaction did not match secondary farming-sickle requirement");
         }
     }
 }

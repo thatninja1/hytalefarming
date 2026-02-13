@@ -16,7 +16,7 @@ Group #Root {
 
     Label #SubtitleLabel {
       Anchor: (Top: 4, Width: 1280, Height: 30);
-      Text: "Upgrade your Thorium Hoe";
+      Text: "Upgrade your Farming Tool";
       Style: (FontSize: 20, Alignment: Center, TextColor: #CBD5E1);
     }
 

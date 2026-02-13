@@ -47,7 +47,7 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
         boolean hasClasspathUi = getClass().getClassLoader().getResource(UI_RESOURCE_PATH) != null;
         boolean looksLoadableFromAssetPack = UI_TEMPLATE.startsWith("Pages/") && hasResourceStreamUi;
 
-        Debug.log("[HoeDebug] UI build start: thread=" + Thread.currentThread().getName()
+        Debug.log("[FarmingDebug] UI build start: thread=" + Thread.currentThread().getName()
                 + " templateDoc=" + UI_TEMPLATE
                 + " expectedJarPath=" + UI_RESOURCE_PATH
                 + " resourceStreamExists=" + hasResourceStreamUi
@@ -55,7 +55,7 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
                 + " assetPackLoadableGuess=" + looksLoadableFromAssetPack);
 
         if (!hasResourceStreamUi || !looksLoadableFromAssetPack) {
-            Debug.log("[HoeDebug] UI open failure: document not resolvable; skipping append");
+            Debug.log("[FarmingDebug] UI open failure: document not resolvable; skipping append");
             if (player != null) {
                 player.sendMessage(Message.raw("UI asset missing: " + UI_TEMPLATE));
             }
@@ -64,7 +64,7 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
 
         String markupError = validateUiMarkupSafely();
         if (markupError != null) {
-            Debug.log("[HoeDebug] UI open failure: markup validation failed -> " + markupError);
+            Debug.log("[FarmingDebug] UI open failure: markup validation failed -> " + markupError);
             if (player != null) {
                 player.sendMessage(Message.raw("[HytaleFarming] UI parse failed; check server logs."));
             }
@@ -72,14 +72,14 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
         }
 
         try {
-            Debug.log("[HoeDebug] append(docOnly) -> " + UI_TEMPLATE);
+            Debug.log("[FarmingDebug] append(docOnly) -> " + UI_TEMPLATE);
             uiCommandBuilder.append(UI_TEMPLATE);
             bindAndPopulate(uiCommandBuilder, uiEventBuilder);
-            Debug.log("[HoeDebug] UI open success for player=" + playerRef.getUsername());
+            Debug.log("[FarmingDebug] UI open success for player=" + playerRef.getUsername());
         } catch (Exception ex) {
-            Debug.log("[HoeDebug] UI open failure append failed: " + ex.getMessage());
+            Debug.log("[FarmingDebug] UI open failure append failed: " + ex.getMessage());
             if (player != null) {
-                player.sendMessage(Message.raw("[HytaleFarming] Failed to open hoe upgrade UI."));
+                player.sendMessage(Message.raw("[HytaleFarming] Failed to open farming tool upgrade UI."));
             }
         }
     }
@@ -88,14 +88,14 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
     public void handleDataEvent(@Nonnull Ref<EntityStore> ref,
                                 @Nonnull Store<EntityStore> store,
                                 String eventData) {
-        Debug.log("[HoeDebug] UI click event received: player=" + playerRef.getUsername() + " event=" + eventData);
+        Debug.log("[FarmingDebug] UI click event received: player=" + playerRef.getUsername() + " event=" + eventData);
         if (eventData == null || eventData.isBlank()) {
             return;
         }
 
         if (eventData.contains(ACTION_CLOSE)) {
             close();
-            Debug.log("[HoeDebug] close event handled");
+            Debug.log("[FarmingDebug] close event handled");
             return;
         }
 
@@ -108,7 +108,7 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
 
         Player player = store.getComponent(ref, Player.getComponentType());
         if (player == null) {
-            Debug.log("[HoeDebug] upgrade click ignored: Player component is null");
+            Debug.log("[FarmingDebug] upgrade click ignored: Player component is null");
             return;
         }
 
@@ -138,14 +138,14 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
         long balanceBefore = tokenService.balance(playerRef.getUuid(), playerRef.getUsername());
 
         if (currentLevel >= maxLevel) {
-            Debug.log("[HoeDebug] upgrade failed: reason=maxed enchant=" + enchantKey + " level=" + currentLevel + " max=" + maxLevel);
+            Debug.log("[FarmingDebug] upgrade failed: reason=maxed enchant=" + enchantKey + " level=" + currentLevel + " max=" + maxLevel);
             player.sendMessage(Message.raw(enchantName + " is already max level."));
             refreshUi();
             return;
         }
 
         if (balanceBefore < cost) {
-            Debug.log("[HoeDebug] upgrade failed: reason=insufficient enchant=" + enchantKey + " balance=" + balanceBefore + " cost=" + cost);
+            Debug.log("[FarmingDebug] upgrade failed: reason=insufficient enchant=" + enchantKey + " balance=" + balanceBefore + " cost=" + cost);
             player.sendMessage(Message.raw("Not enough Tokens. Need " + cost + "."));
             refreshUi();
             return;
@@ -160,7 +160,7 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
             upgraded = tokenService.tryUpgradeKeyfinder(playerRef.getUuid(), playerRef.getUsername());
         }
         if (!upgraded) {
-            Debug.log("[HoeDebug] upgrade failed: reason=serviceReturnedFalse enchant=" + enchantKey);
+            Debug.log("[FarmingDebug] upgrade failed: reason=serviceReturnedFalse enchant=" + enchantKey);
             player.sendMessage(Message.raw("Upgrade failed. Please try again."));
             refreshUi();
             return;
@@ -168,7 +168,7 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
 
         int newLevel = tokenService.enchantLevel(playerRef.getUuid(), playerRef.getUsername(), enchantKey);
         long balanceAfter = tokenService.balance(playerRef.getUuid(), playerRef.getUsername());
-        Debug.log("[HoeDebug] upgrade success: enchant=" + enchantKey
+        Debug.log("[FarmingDebug] upgrade success: enchant=" + enchantKey
                 + " cost=" + cost
                 + " balanceBefore=" + balanceBefore
                 + " balanceAfter=" + balanceAfter
@@ -213,27 +213,27 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
         uiCommandBuilder.set("#KeyfinderUpgradeButtonLabel.Text", keyfinderLevel >= keyfinderMaxLevel ? "MAX" : "Upgrade");
 
         uiEventBuilder.addEventBinding(CustomUIEventBindingType.Activating, "#CloseButton", EventData.of(ACTION_KEY, ACTION_CLOSE));
-        Debug.log("[HoeDebug] bound UI event Activating -> #CloseButton");
+        Debug.log("[FarmingDebug] bound UI event Activating -> #CloseButton");
 
         if (tokenFinderLevel < tokenFinderMaxLevel) {
             uiEventBuilder.addEventBinding(CustomUIEventBindingType.Activating, "#TokenFinderUpgradeButton", EventData.of(ACTION_KEY, ACTION_UPGRADE_TOKEN_FINDER));
-            Debug.log("[HoeDebug] bound UI event Activating -> #TokenFinderUpgradeButton");
+            Debug.log("[FarmingDebug] bound UI event Activating -> #TokenFinderUpgradeButton");
         } else {
-            Debug.log("[HoeDebug] token finder at MAX; no upgrade binding added");
+            Debug.log("[FarmingDebug] token finder at MAX; no upgrade binding added");
         }
 
         if (fortuneLevel < fortuneMaxLevel) {
             uiEventBuilder.addEventBinding(CustomUIEventBindingType.Activating, "#FortuneUpgradeButton", EventData.of(ACTION_KEY, ACTION_UPGRADE_FORTUNE));
-            Debug.log("[HoeDebug] bound UI event Activating -> #FortuneUpgradeButton");
+            Debug.log("[FarmingDebug] bound UI event Activating -> #FortuneUpgradeButton");
         } else {
-            Debug.log("[HoeDebug] fortune at MAX; no upgrade binding added");
+            Debug.log("[FarmingDebug] fortune at MAX; no upgrade binding added");
         }
 
         if (keyfinderLevel < keyfinderMaxLevel) {
             uiEventBuilder.addEventBinding(CustomUIEventBindingType.Activating, "#KeyfinderUpgradeButton", EventData.of(ACTION_KEY, ACTION_UPGRADE_KEYFINDER));
-            Debug.log("[HoeDebug] bound UI event Activating -> #KeyfinderUpgradeButton");
+            Debug.log("[FarmingDebug] bound UI event Activating -> #KeyfinderUpgradeButton");
         } else {
-            Debug.log("[HoeDebug] keyfinder at MAX; no upgrade binding added");
+            Debug.log("[FarmingDebug] keyfinder at MAX; no upgrade binding added");
         }
     }
 
@@ -301,9 +301,9 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
     private void refreshUi() {
         try {
             rebuild();
-            Debug.log("[HoeDebug] UI refreshed after upgrade interaction");
+            Debug.log("[FarmingDebug] UI refreshed after upgrade interaction");
         } catch (Exception ex) {
-            Debug.log("[HoeDebug] UI refresh failed: " + ex.getMessage());
+            Debug.log("[FarmingDebug] UI refresh failed: " + ex.getMessage());
         }
     }
 }

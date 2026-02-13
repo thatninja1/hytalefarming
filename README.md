@@ -1,11 +1,21 @@
 # hytalefarming
 
-Hytale plugin/mod `v1.0.1` that turns `Tool_Hoe_Thorium` into an upgradeable hoe.
+Hytale plugin/mod `v2.0` for Farming+ sickles with upgrade UI, token currency, and enchant procs.
+
+## Supported farming tools
+The plugin treats these item IDs as valid farming tools:
+- `Tool_Sickle_Adamantite`
+- `Tool_Sickle_Cobalt`
+- `Tool_Sickle_Crude`
+- `Tool_Sickle_Gold`
+- `Tool_Sickle_Iron`
+- `Tool_Sickle_Mithril`
+- `Tool_Sickle_Steel_Rusty`
+- `Tool_Sickle_Thorium`
 
 ## Interaction behavior
-- Upgrade UI opens **only** on `Secondary` (right-click) while holding `Tool_Hoe_Thorium`.
-- `Use` (F) with `Tool_Hoe_Thorium` now attempts crop harvest logic (not UI open).
-- Non-supported interactions are ignored with debug reason logs.
+- `Secondary` opens the upgrade UI (only for supported sickles).
+- `Use` (F) and `Primary` are harvest/proc paths and do **not** open UI.
 
 ## Commands
 - `/tokens bal` (self)
@@ -15,127 +25,60 @@ Hytale plugin/mod `v1.0.1` that turns `Tool_Hoe_Thorium` into an upgradeable hoe
 - `/tokenstop`
 - `/farming reload` (requires `hytalefarming.farming.reload`)
 
-### `/farming reload`
-Reloads plugin JSON configs from disk without restart:
-- `tokens.json`
-- `enchants.json`
-- `config.json`
-
-Behavior:
-- Successfully parsed files are applied immediately.
-- If a file fails parsing/loading, plugin keeps the last-known-good in-memory config for that file and logs the error.
-- Reload always logs loaded files and whether defaults were applied for missing files.
-- With debug enabled, caller, reloaded files, warnings, and errors are logged.
-
 ## Config files
 
 ### `config.json`
-UI text and debug toggle are editable:
-
 ```json
 {
   "debug": true,
   "ui": {
     "title": "Ninja Farming",
-    "subtitle": "Upgrade your Thorium Hoe"
+    "subtitle": "Upgrade your Farming Tool"
   }
 }
 ```
 
-`debug` behavior:
-- All plugin debug traces (`[HoeDebug]`, `[Harvest]`, `[CropBreak]`, `[EnchantProc]`, `[Drops]`, etc.) are gated by the debug flag.
-- If `debug=false`, those debug traces are suppressed.
+Debug behavior:
+- Debug traces (`[FarmingDebug]`, `[Harvest]`, `[CropBreak]`, `[EnchantProc]`, `[Drops]`, etc.) are gated by debug.
+- If debug is false, debug traces are suppressed.
 - Warnings/errors still log.
 
 ### `enchants.json`
-Each enchant uses:
+Each enchant supports:
 - `maxLevel`
 - `baseUpgradeCost`
-- `enchantProc` (proc value from config)
-- `procMessage` (chat message template used when that enchant procs)
+- `enchantProc`
+- `procMessage`
 
 `tokenFinder` also supports:
-- `defaultLevel` (applies only when player has no saved token finder level yet)
+- `defaultLevel`
 
-Unified proc rule for all enchants (`token_finder`, `fortune`, `keyfinder`, future):
-- If `enchantProc >= 1.0` => computed chance `1.0` (always proc)
-- Else => `computedChance = enchantProc * (level / maxLevel)`
-- Clamp to `[0, 1]`
+#### `procMessage` placeholders
+- `{amount}` token amount from Token Finder
+- `{currency}` configured currency name
+- `{enchant}` enchant display name
+- `{level}` enchant level
+- `{crateId}` chosen keyfinder crate id
+- `{extra}` fortune extra crop amount
 
-Debug logs for valid harvests include:
-- enchant id
-- level
-- maxLevel
-- enchantProc (config)
-- computedChance
-- roll
-- procResult
+#### Hex color support
+- `#RRGGBB` tokens are accepted in templates.
+- If hex chat colors are unsupported by runtime, hex tokens are stripped.
+- Startup logs a once-only warning: `Hex chat colors not supported; stripping codes.`
 
-Example:
+#### Token Finder default level
+- New players get `token_finder = tokenFinder.defaultLevel`.
+- Existing players keep saved values.
+- Existing players missing `token_finder` get migrated once.
 
-```json
-{
-  "tokenFinder": {
-    "maxLevel": 10,
-    "baseUpgradeCost": 10,
-    "defaultLevel": 1,
-    "enchantProc": 1.0,
-    "procMessage": "#808080+{amount} {currency} (#FFD700{enchant}#808080)"
-  },
-  "fortune": {
-    "maxLevel": 5,
-    "baseUpgradeCost": 20,
-    "upgradeCostIncrease": 100,
-    "enchantProc": 1.0,
-    "procMessage": "#80FF80Fortune proc! +{extra} crops"
-  },
-  "keyfinder": {
-    "maxLevel": 100,
-    "baseUpgradeCost": 50,
-    "enchantProc": 1.0,
-    "procMessage": "#00FFFFKeyfinder! You found a key: {crateId}",
-    "crates": [
-      {
-        "crateId": "Crate1",
-        "command": "/crates givekey {player} <crateid>",
-        "crate_chance": 0.5
-      }
-    ]
-  }
-}
-```
+## Proc and crop rules
+- Proc logic runs only for fully-grown crop blocks (`State_Definitions_StageFinal`).
+- Radius harvesting procs are per-block (independent rolls per crop block).
+- In mixed-radius harvests, only fully-grown crops are eligible.
 
-`{player}` -> player username, `<crateid>` -> selected crate id in the configured command.
+## Drop handling
+- Plugin attempts to intercept vanilla break drops and add them to player inventory, including `Ingredient_Life_Essence`.
+- If the engine/API does not expose deterministic drop data, plugin falls back to vanilla ground drops and logs fallback/debug details.
 
-`procMessage` placeholders:
-- `{amount}`: token amount awarded (Token Finder)
-- `{currency}`: configured currency name
-- `{enchant}`: enchant display name (Token Finder / Fortune / Keyfinder)
-- `{level}`: current enchant level
-- `{crateId}`: selected keyfinder crate id
-- `{extra}`: extra crop amount from Fortune
-
-### Hex colors in proc messages
-- Hex markers in `#RRGGBB` format are accepted in templates.
-- Current server chat path does **not** support hex formatting directly, so hex markers are stripped before sending.
-- Plugin logs this warning once on startup: `Hex chat colors not supported; stripping codes.`
-
-### Token Finder default level behavior
-- New players are initialized with `token_finder = tokenFinder.defaultLevel`.
-- Existing players keep their stored level.
-- Migration case is supported: if a player exists in data but `token_finder` key is missing, the default is applied once.
-
-## Harvest behavior
-- Valid crop detection remains:
-  - crop id prefix (`Crop_` / `Plant_Crop_`)
-  - fully-grown state (`State_Definitions_StageFinal`)
-- `Use` (F) on a valid fully-grown crop with thorium hoe now **does not force-break the block in plugin code**; instead it registers pending context, waits briefly, verifies vanilla harvest changed the block away from `StageFinal`, then invokes the same shared proc/reward pipeline used by normal break events.
-- `Use` on non-crop / non-final crop does nothing and does not open UI.
-- Reward dedupe guard is applied per player+block position in a short window to avoid double-awards if Use + Break overlap.
-- Debug logs include `source=PrimaryBreak` vs `source=UseHarvest`, cached held item id, cached broken block id, validation result, and per-enchant proc rolls/results.
-- Harvest debug reports: pending-context registration, delayed verification scheduling, block state before/after, whether vanilla harvest was observed, and whether proc pipeline was invoked or skipped.
-
-## Drop-to-inventory note
-- In this plugin context, `BreakBlockEvent` does not expose computed drop lists for deterministic interception.
-- Therefore vanilla block drops are preserved (ground drops), including vanilla Essence behavior (`Ingredient_Life_Essence`).
-- Debug logs explicitly state when vanilla drops are left unchanged.
+## Keyfinder
+- Key commands support `{player}` and `<crateid>` replacement in configured command strings.

@@ -76,11 +76,11 @@ public class HytaleFarmingPlugin extends JavaPlugin {
         Debug.log("registered command: /farming");
 
         getCodecRegistry(Interaction.CODEC).register(
-                "thorium_hoe_upgrade_menu",
+                "farming_tool_upgrade_menu",
                 HoeUpgradeMenuInteraction.class,
                 HoeUpgradeMenuInteraction.CODEC
         );
-        Debug.log("registered interaction codec: thorium_hoe_upgrade_menu");
+        Debug.log("registered interaction codec: farming_tool_upgrade_menu");
 
         this.tokenFinderBreakBlockSystem = new TokenFinderBreakBlockSystem(this);
         getEntityStoreRegistry().registerSystem(tokenFinderBreakBlockSystem);
@@ -89,7 +89,7 @@ public class HytaleFarmingPlugin extends JavaPlugin {
 
         boolean uiAssetStreamPresent = getClass().getResourceAsStream("/Common/UI/Custom/Pages/HytaleFarming/ThoriumHoeUpgrade.ui") != null;
         boolean uiAssetClasspathPresent = getClass().getClassLoader().getResource("Common/UI/Custom/Pages/HytaleFarming/ThoriumHoeUpgrade.ui") != null;
-        Debug.log("[HoeDebug] startup UI asset check resourceStream(/Common/UI/Custom/Pages/HytaleFarming/ThoriumHoeUpgrade.ui)="
+        Debug.log("[FarmingDebug] startup UI asset check resourceStream(/Common/UI/Custom/Pages/HytaleFarming/ThoriumHoeUpgrade.ui)="
                 + uiAssetStreamPresent + " classLoader(Common/UI/Custom/Pages/HytaleFarming/ThoriumHoeUpgrade.ui)=" + uiAssetClasspathPresent);
 
         this.inputPacketHook = new InputPacketHook(this);
@@ -117,7 +117,7 @@ public class HytaleFarmingPlugin extends JavaPlugin {
         try {
             Ref<EntityStore> ref = playerRef.getReference();
             if (ref == null || !ref.isValid()) {
-                Debug.log("[HoeDebug] openUpgradeUiSafe aborted: invalid player ref for " + playerRef.getUsername());
+                Debug.log("[FarmingDebug] openUpgradeUiSafe aborted: invalid player ref for " + playerRef.getUsername());
                 return;
             }
 
@@ -129,7 +129,7 @@ public class HytaleFarmingPlugin extends JavaPlugin {
             }
 
             String currentThread = Thread.currentThread().getName();
-            Debug.log("[HoeDebug] openUpgradeUiSafe called on thread=" + currentThread
+            Debug.log("[FarmingDebug] openUpgradeUiSafe called on thread=" + currentThread
                     + " targetWorld=" + targetWorld.getName()
                     + " worldThreadActive=" + targetWorld.isInThread());
 
@@ -138,39 +138,39 @@ public class HytaleFarmingPlugin extends JavaPlugin {
                 openTask.run();
             } else {
                 targetWorld.execute(openTask);
-                Debug.log("[HoeDebug] scheduled UI open to WorldThread=" + targetWorld.getName());
+                Debug.log("[FarmingDebug] scheduled UI open to WorldThread=" + targetWorld.getName());
             }
         } catch (Exception ex) {
-            Debug.log("[HoeDebug] openUpgradeUiSafe failed before scheduling: " + ex.getMessage());
+            Debug.log("[FarmingDebug] openUpgradeUiSafe failed before scheduling: " + ex.getMessage());
         }
     }
 
     private void openUpgradeUiInternal(PlayerRef playerRef, String interactionType, String heldItemId) {
         String threadName = Thread.currentThread().getName();
-        Debug.log("[HoeDebug] openUpgradeUiInternal on thread=" + threadName + " interactionType=" + interactionType + " heldItemId=" + heldItemId);
+        Debug.log("[FarmingDebug] openUpgradeUiInternal on thread=" + threadName + " interactionType=" + interactionType + " heldItemId=" + heldItemId);
 
         try {
             Ref<EntityStore> ref = playerRef.getReference();
             if (ref == null || !ref.isValid()) {
-                Debug.log("[HoeDebug] Cannot open UI; invalid player ref in internal for " + playerRef.getUsername());
+                Debug.log("[FarmingDebug] Cannot open UI; invalid player ref in internal for " + playerRef.getUsername());
                 return;
             }
 
             Store<EntityStore> store = ref.getStore();
             Player player = store.getComponent(ref, Player.getComponentType());
             if (player == null) {
-                Debug.log("[HoeDebug] Cannot open UI; Player component null for " + playerRef.getUsername());
+                Debug.log("[FarmingDebug] Cannot open UI; Player component null for " + playerRef.getUsername());
                 return;
             }
 
             long tokenBalance = tokenService.balance(playerRef.getUuid(), playerRef.getUsername());
             int tokenFinderLevel = tokenService.enchantLevel(playerRef.getUuid(), playerRef.getUsername(), "token_finder");
-            Debug.log("[HoeDebug] tokenBalance=" + tokenBalance + " tokenFinderLevel=" + tokenFinderLevel);
+            Debug.log("[FarmingDebug] tokenBalance=" + tokenBalance + " tokenFinderLevel=" + tokenFinderLevel);
 
             player.getPageManager().openCustomPage(ref, store, new ThoriumHoeUpgradePage(playerRef));
-            Debug.log("[HoeDebug] UI open invoked successfully for player=" + playerRef.getUsername());
+            Debug.log("[FarmingDebug] UI open invoked successfully for player=" + playerRef.getUsername());
         } catch (Exception ex) {
-            Debug.log("[HoeDebug] UI open failed for player=" + playerRef.getUsername() + " reason=" + ex.getMessage());
+            Debug.log("[FarmingDebug] UI open failed for player=" + playerRef.getUsername() + " reason=" + ex.getMessage());
             try {
                 Ref<EntityStore> ref = playerRef.getReference();
                 if (ref != null && ref.isValid()) {
@@ -181,7 +181,7 @@ public class HytaleFarmingPlugin extends JavaPlugin {
                     }
                 }
             } catch (Exception ignored) {
-                Debug.log("[HoeDebug] failed to notify player about UI failure: " + ignored.getMessage());
+                Debug.log("[FarmingDebug] failed to notify player about UI failure: " + ignored.getMessage());
             }
         }
     }
