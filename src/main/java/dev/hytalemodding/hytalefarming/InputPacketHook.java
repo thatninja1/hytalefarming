@@ -18,6 +18,8 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.hytalemodding.hytalefarming.events.TokenFinderBreakBlockSystem;
 import dev.hytalemodding.hytalefarming.util.FarmingTools;
 
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -27,6 +29,7 @@ import java.util.concurrent.TimeUnit;
 
 public class InputPacketHook {
     private static final long BREAK_OBSERVE_DELAY_MS = 100L;
+    private static final long PRIMARY_VERIFY_DELAY_MS = 100L;
 
     private final HytaleFarmingPlugin plugin;
     private final Map<UUID, Integer> packetCounts = new ConcurrentHashMap<>();
@@ -55,12 +58,12 @@ public class InputPacketHook {
                 Debug.log("[FarmingDebug] SyncInteractionChains: player=" + playerRef.getUsername() + " type=" + type + " heldItemId=" + heldItemId);
 
                 if (type == InteractionType.Secondary) {
-                    handleSecondaryHarvestContext(playerRef, heldItemId, update);
+                    handleAreaHarvestContext(playerRef, heldItemId, update, InteractionType.Secondary);
                     continue;
                 }
 
                 if (type == InteractionType.Primary) {
-                    handlePrimaryHarvestContext(playerRef, heldItemId, update);
+                    handleAreaHarvestContext(playerRef, heldItemId, update, InteractionType.Primary);
                     continue;
                 }
 
@@ -93,40 +96,103 @@ public class InputPacketHook {
         Debug.log("Registered inbound packet watchers (input hook)");
     }
 
-    private void handleSecondaryHarvestContext(PlayerRef playerRef, String heldItemId, SyncInteractionChain update) {
-        cacheInteractionContext(playerRef, heldItemId, InteractionType.Secondary, update);
-    }
-
-    private void handlePrimaryHarvestContext(PlayerRef playerRef, String heldItemId, SyncInteractionChain update) {
-        cacheInteractionContext(playerRef, heldItemId, InteractionType.Primary, update);
-    }
-
-    private void cacheInteractionContext(PlayerRef playerRef, String heldItemId, InteractionType interactionType, SyncInteractionChain update) {
+    private void handleAreaHarvestContext(PlayerRef playerRef,
+                                          String heldItemId,
+                                          SyncInteractionChain update,
+                                          InteractionType interactionType) {
         Vector3i target = resolveTargetBlock(update);
 
-        if (FarmingTools.isValidFarmingTool(heldItemId)) {
-            TokenFinderBreakBlockSystem.registerRecentSickleInteraction(
-                    playerRef,
-                    heldItemId,
-                    target,
-                    interactionType.name()
-            );
-            Debug.log("[FarmingDebug] " + interactionType + " sickle detected -> caching context player=" + playerRef.getUsername()
-                    + " heldItemId=" + heldItemId
-                    + " target=" + (target == null ? "<unknown>" : (target.getX() + "," + target.getY() + "," + target.getZ()))
-                    + " expiryMs=500 allowed_" + interactionType.name().toLowerCase() + "_sickle=true");
+        if (!FarmingTools.isValidFarmingTool(heldItemId)) {
+            TokenFinderBreakBlockSystem.RecentSickleInteractionContext existing = TokenFinderBreakBlockSystem.getRecentSickleInteraction(playerRef);
+            if (existing != null) {
+                Debug.log("[FarmingDebug] " + interactionType + " packet missing/invalid heldItemId; keeping recent sickle context player="
+                        + playerRef.getUsername() + " cachedHeldItemId=" + existing.heldItemId());
+            } else {
+                Debug.log("[FarmingDebug] ignored interaction type=" + interactionType + " player=" + playerRef.getUsername()
+                        + " heldItemId=" + heldItemId + " reason=not_farming_sickle");
+            }
             return;
         }
 
-        TokenFinderBreakBlockSystem.RecentSickleInteractionContext existing = TokenFinderBreakBlockSystem.getRecentSickleInteraction(playerRef);
-        if (existing != null) {
-            Debug.log("[FarmingDebug] " + interactionType + " packet missing/invalid heldItemId; keeping recent sickle context player="
-                    + playerRef.getUsername() + " cachedHeldItemId=" + existing.heldItemId());
+        TokenFinderBreakBlockSystem.registerRecentSickleInteraction(playerRef, heldItemId, target, interactionType.name());
+        Debug.log("[FarmingDebug] " + interactionType + " sickle detected -> caching context player=" + playerRef.getUsername()
+                + " heldItemId=" + heldItemId
+                + " target=" + (target == null ? "<unknown>" : (target.getX() + "," + target.getY() + "," + target.getZ()))
+                + " expiryMs=500 allowed_" + interactionType.name().toLowerCase() + "_sickle=true");
+
+        if (target != null) {
+            runPrimaryLikeAreaVerification(playerRef, heldItemId, target, interactionType.name());
+        }
+    }
+
+    private void runPrimaryLikeAreaVerification(PlayerRef playerRef, String heldItemId, Vector3i target, String interactionType) {
+        Ref<EntityStore> ref = playerRef.getReference();
+        if (ref == null || !ref.isValid()) {
             return;
         }
 
-        Debug.log("[FarmingDebug] ignored interaction type=" + interactionType + " player=" + playerRef.getUsername()
-                + " heldItemId=" + heldItemId + " reason=not_farming_sickle allowed_" + interactionType.name().toLowerCase() + "_sickle=false");
+        Store<EntityStore> store = ref.getStore();
+        EntityStore entityStore = store.getExternalData();
+        World world = entityStore.getWorld();
+
+        world.execute(() -> {
+            Player player = store.getComponent(ref, Player.getComponentType());
+            if (player == null) {
+                return;
+            }
+
+            List<Vector3i> area = FarmingTools.getHarvestArea(heldItemId, target);
+            Map<Vector3i, String> snapshotFullyGrown = new HashMap<>();
+
+            for (Vector3i pos : area) {
+                if (world.getBlockType(pos.getX(), pos.getY(), pos.getZ()) == null) {
+                    continue;
+                }
+                String blockId = TokenFinderBreakBlockSystem.normalizeBlockId(world.getBlockType(pos.getX(), pos.getY(), pos.getZ()).getId());
+                if (TokenFinderBreakBlockSystem.isValidHarvestableCrop(blockId)) {
+                    snapshotFullyGrown.put(pos, blockId);
+                }
+            }
+
+            Debug.log("[Harvest] source=PrimarySickleHarvest interactionType=" + interactionType + " snapshotCount=" + area.size()
+                    + " fullyGrownCount=" + snapshotFullyGrown.size() + " player=" + playerRef.getUsername());
+
+            postUseVerifier.schedule(() -> world.execute(() -> {
+                int harvestedDetected = 0;
+                int invoked = 0;
+
+                for (Map.Entry<Vector3i, String> entry : snapshotFullyGrown.entrySet()) {
+                    Vector3i pos = entry.getKey();
+                    String beforeBlockId = entry.getValue();
+
+                    String afterBlockId = "<unknown>";
+                    if (world.getBlockType(pos.getX(), pos.getY(), pos.getZ()) != null) {
+                        afterBlockId = TokenFinderBreakBlockSystem.normalizeBlockId(world.getBlockType(pos.getX(), pos.getY(), pos.getZ()).getId());
+                    }
+
+                    boolean stillFullyGrown = TokenFinderBreakBlockSystem.isValidHarvestableCrop(afterBlockId);
+                    if (stillFullyGrown) {
+                        continue;
+                    }
+
+                    harvestedDetected++;
+                    plugin.getTokenFinderBreakBlockSystem().handleCropBreakAndProcs(
+                            player,
+                            playerRef,
+                            heldItemId,
+                            beforeBlockId,
+                            pos,
+                            "PrimarySickleHarvest"
+                    );
+                    invoked++;
+                }
+
+                Debug.log("[Harvest] source=PrimarySickleHarvest interactionType=" + interactionType
+                        + " harvestedDetectedCount=" + harvestedDetected
+                        + " procInvocationCount=" + invoked
+                        + " player=" + playerRef.getUsername());
+            }), PRIMARY_VERIFY_DELAY_MS, TimeUnit.MILLISECONDS);
+        });
     }
 
     private void handleUseHarvest(PlayerRef playerRef, String heldItemId, SyncInteractionChain update) {
