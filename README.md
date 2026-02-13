@@ -14,9 +14,9 @@ The plugin treats these item IDs as valid farming tools:
 - `Tool_Sickle_Thorium`
 
 ## Interaction behavior
-- `Secondary` opens the upgrade UI (only for supported sickles).
-- `Use` (F) and `Primary` are harvest/proc paths and do **not** open UI.
-- Primary with a supported sickle caches short-lived context so subsequent engine AOE `BreakBlockEvent`s can still be attributed to the sickle when event hand-item metadata is null.
+- `Secondary`, `Primary`, and `Use` with supported sickles are treated as harvest/proc interactions only.
+- UI no longer opens from sickle interactions. Use `/farming upgrade` to open the upgrade UI.
+- Primary/Secondary with a supported sickle cache short-lived context so subsequent engine AOE `BreakBlockEvent`s can still be attributed when event hand-item metadata is null.
 
 ## Commands
 - `/tokens bal` (self)
@@ -25,6 +25,7 @@ The plugin treats these item IDs as valid farming tools:
 - `/tokens give <player> <amount>`
 - `/tokenstop`
 - `/farming reload` (requires `hytalefarming.farming.reload`)
+- `/farming upgrade`
 
 ## Config files
 

@@ -55,17 +55,17 @@ public class InputPacketHook {
                 Debug.log("[FarmingDebug] SyncInteractionChains: player=" + playerRef.getUsername() + " type=" + type + " heldItemId=" + heldItemId);
 
                 if (type == InteractionType.Secondary) {
-                    handleSecondary(playerRef, heldItemId);
+                    handleSecondaryHarvestContext(playerRef, heldItemId, update);
+                    continue;
+                }
+
+                if (type == InteractionType.Primary) {
+                    handlePrimaryHarvestContext(playerRef, heldItemId, update);
                     continue;
                 }
 
                 if (type == InteractionType.Use) {
                     handleUseHarvest(playerRef, heldItemId, update);
-                    continue;
-                }
-
-                if (type == InteractionType.Primary) {
-                    handlePrimaryHarvest(playerRef, heldItemId, update);
                     continue;
                 }
 
@@ -93,46 +93,40 @@ public class InputPacketHook {
         Debug.log("Registered inbound packet watchers (input hook)");
     }
 
-    private void handleSecondary(PlayerRef playerRef, String heldItemId) {
-        if (!FarmingTools.isValidFarmingTool(heldItemId)) {
-            Debug.log("[FarmingDebug] ignored interaction type=Secondary player=" + playerRef.getUsername()
-                    + " heldItemId=" + heldItemId + " reason=not_farming_sickle");
-            return;
-        }
-
-        Debug.log("[FarmingDebug] accepted interaction type=Secondary player=" + playerRef.getUsername()
-                + " heldItemId=" + heldItemId + " -> opening UI");
-        plugin.openUpgradeUiSafe(playerRef, null, InteractionType.Secondary.name(), heldItemId);
+    private void handleSecondaryHarvestContext(PlayerRef playerRef, String heldItemId, SyncInteractionChain update) {
+        cacheInteractionContext(playerRef, heldItemId, InteractionType.Secondary, update);
     }
 
+    private void handlePrimaryHarvestContext(PlayerRef playerRef, String heldItemId, SyncInteractionChain update) {
+        cacheInteractionContext(playerRef, heldItemId, InteractionType.Primary, update);
+    }
 
-    private void handlePrimaryHarvest(PlayerRef playerRef, String heldItemId, SyncInteractionChain update) {
-        boolean allowedPrimarySickle = FarmingTools.isValidFarmingTool(heldItemId);
-        if (!allowedPrimarySickle) {
-            Debug.log("[FarmingDebug] ignored interaction type=Primary player=" + playerRef.getUsername()
-                    + " heldItemId=" + heldItemId + " reason=not_farming_sickle allowed_primary_sickle=" + allowedPrimarySickle);
-            return;
-        }
-
+    private void cacheInteractionContext(PlayerRef playerRef, String heldItemId, InteractionType interactionType, SyncInteractionChain update) {
         Vector3i target = resolveTargetBlock(update);
-        if (target != null) {
-            TokenFinderBreakBlockSystem.registerPendingPrimarySickleHarvest(
+
+        if (FarmingTools.isValidFarmingTool(heldItemId)) {
+            TokenFinderBreakBlockSystem.registerRecentSickleInteraction(
                     playerRef,
-                    target.getX(),
-                    target.getY(),
-                    target.getZ(),
-                    heldItemId
+                    heldItemId,
+                    target,
+                    interactionType.name()
             );
-            Debug.log("[FarmingDebug] Primary sickle detected -> caching context player=" + playerRef.getUsername()
+            Debug.log("[FarmingDebug] " + interactionType + " sickle detected -> caching context player=" + playerRef.getUsername()
                     + " heldItemId=" + heldItemId
-                    + " target=" + target.getX() + "," + target.getY() + "," + target.getZ()
-                    + " windowMs=350 allowed_primary_sickle=" + allowedPrimarySickle);
+                    + " target=" + (target == null ? "<unknown>" : (target.getX() + "," + target.getY() + "," + target.getZ()))
+                    + " expiryMs=500 allowed_" + interactionType.name().toLowerCase() + "_sickle=true");
             return;
         }
 
-        TokenFinderBreakBlockSystem.registerPendingPrimarySickleHarvest(playerRef, 0, 0, 0, heldItemId);
-        Debug.log("[FarmingDebug] Primary sickle detected -> caching context player=" + playerRef.getUsername()
-                + " heldItemId=" + heldItemId + " target=<unknown> windowMs=350 allowed_primary_sickle=" + allowedPrimarySickle);
+        TokenFinderBreakBlockSystem.RecentSickleInteractionContext existing = TokenFinderBreakBlockSystem.getRecentSickleInteraction(playerRef);
+        if (existing != null) {
+            Debug.log("[FarmingDebug] " + interactionType + " packet missing/invalid heldItemId; keeping recent sickle context player="
+                    + playerRef.getUsername() + " cachedHeldItemId=" + existing.heldItemId());
+            return;
+        }
+
+        Debug.log("[FarmingDebug] ignored interaction type=" + interactionType + " player=" + playerRef.getUsername()
+                + " heldItemId=" + heldItemId + " reason=not_farming_sickle allowed_" + interactionType.name().toLowerCase() + "_sickle=false");
     }
 
     private void handleUseHarvest(PlayerRef playerRef, String heldItemId, SyncInteractionChain update) {
@@ -187,7 +181,7 @@ public class InputPacketHook {
                         target.getX(),
                         target.getY(),
                         target.getZ(),
-                        heldItemId,
+                        cachedHeldItemId,
                         cachedBrokenBlockId
                 );
 

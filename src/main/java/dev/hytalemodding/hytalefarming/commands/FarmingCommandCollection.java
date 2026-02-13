@@ -8,5 +8,6 @@ public class FarmingCommandCollection extends AbstractCommandCollection {
     public FarmingCommandCollection(HytaleFarmingPlugin plugin) {
         super("farming", "HytaleFarming plugin commands");
         addSubCommand(new FarmingReloadCommand(plugin));
+        addSubCommand(new FarmingUpgradeCommand(plugin));
     }
 }

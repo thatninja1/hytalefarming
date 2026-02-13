@@ -35,11 +35,11 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
 
     private static final long DEDUPE_WINDOW_MS = 250L;
     private static final long PENDING_USE_WINDOW_MS = 1200L;
-    private static final long PENDING_PRIMARY_WINDOW_MS = 350L;
+    private static final long RECENT_INTERACTION_WINDOW_MS = 500L;
     private static final long RADIUS_LOG_WINDOW_MS = 600L;
     private static final Map<String, Long> RECENT_HARVEST_REWARDS = new ConcurrentHashMap<>();
     private static final Map<String, PendingUseHarvestContext> PENDING_USE_HARVESTS = new ConcurrentHashMap<>();
-    private static final Map<String, PendingPrimaryHarvestContext> PENDING_PRIMARY_HARVESTS = new ConcurrentHashMap<>();
+    private static final Map<String, RecentSickleInteractionContext> RECENT_SICKLE_INTERACTIONS = new ConcurrentHashMap<>();
     private static final Map<String, Long> RECENT_BREAK_EVENTS = new ConcurrentHashMap<>();
     private static final Map<String, RadiusProcStats> RADIUS_PROC_STATS = new ConcurrentHashMap<>();
 
@@ -95,12 +95,17 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         }
 
         if (!FarmingTools.isValidFarmingTool(resolvedHeldItemId)) {
-            PendingPrimaryHarvestContext primaryPending = consumePendingPrimarySickleHarvest(playerRef, target);
-            if (primaryPending != null) {
-                resolvedHeldItemId = primaryPending.heldItemId();
-                source = "PrimarySickleContextApplied";
+            RecentSickleInteractionContext context = resolveRecentSickleInteractionForBreak(playerRef, target);
+            if (context != null) {
+                resolvedHeldItemId = context.heldItemId();
+                source = "Primary".equals(context.interactionType())
+                        ? "PrimarySickleContextApplied"
+                        : "SecondarySickleContextApplied";
                 Debug.log("[CropBreak] source=" + source + " usedCachedContext=true cachedHeldItemId=" + resolvedHeldItemId
-                        + " ageMs=" + (System.currentTimeMillis() - primaryPending.createdAtMs()));
+                        + " ageMs=" + (System.currentTimeMillis() - context.timestampMs())
+                        + " interactionType=" + context.interactionType());
+            } else {
+                Debug.log("[CropBreak] no context attachment source=" + source + " reason=no_context_or_expired_or_out_of_range");
             }
         }
 
@@ -355,11 +360,56 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         return allowed;
     }
 
-    public static void registerPendingPrimarySickleHarvest(PlayerRef playerRef, int x, int y, int z, String heldItemId) {
+
+    public static void registerRecentSickleInteraction(PlayerRef playerRef,
+                                                     String heldItemId,
+                                                     Vector3i target,
+                                                     String interactionType) {
         String key = playerRef.getUuid().toString();
-        PENDING_PRIMARY_HARVESTS.put(key, new PendingPrimaryHarvestContext(heldItemId, x, y, z, System.currentTimeMillis()));
-        Debug.log("[Harvest] registered pending Primary context player=" + playerRef.getUsername() + " key=" + key
-                + " heldItemId=" + heldItemId + " target=" + x + "," + y + "," + z + " windowMs=" + PENDING_PRIMARY_WINDOW_MS);
+        int x = target == null ? 0 : target.getX();
+        int y = target == null ? 0 : target.getY();
+        int z = target == null ? 0 : target.getZ();
+        long now = System.currentTimeMillis();
+        RECENT_SICKLE_INTERACTIONS.put(key, new RecentSickleInteractionContext(now, heldItemId, x, y, z, interactionType));
+        Debug.log("[Harvest] stored recent interaction context player=" + playerRef.getUsername()
+                + " interactionType=" + interactionType + " heldItemId=" + heldItemId
+                + " target=" + x + "," + y + "," + z
+                + " expiryAtMs=" + (now + RECENT_INTERACTION_WINDOW_MS));
+    }
+
+    public static RecentSickleInteractionContext getRecentSickleInteraction(PlayerRef playerRef) {
+        String key = playerRef.getUuid().toString();
+        RecentSickleInteractionContext context = RECENT_SICKLE_INTERACTIONS.get(key);
+        if (context == null) {
+            return null;
+        }
+        long age = System.currentTimeMillis() - context.timestampMs();
+        if (age > RECENT_INTERACTION_WINDOW_MS) {
+            RECENT_SICKLE_INTERACTIONS.remove(key);
+            return null;
+        }
+        return context;
+    }
+
+    private static RecentSickleInteractionContext resolveRecentSickleInteractionForBreak(PlayerRef playerRef, Vector3i target) {
+        RecentSickleInteractionContext context = getRecentSickleInteraction(playerRef);
+        if (context == null) {
+            return null;
+        }
+
+        if (target == null || (context.x() == 0 && context.y() == 0 && context.z() == 0)) {
+            return context;
+        }
+
+        int dx = Math.abs(target.getX() - context.x());
+        int dy = Math.abs(target.getY() - context.y());
+        int dz = Math.abs(target.getZ() - context.z());
+        if (dx > 8 || dy > 3 || dz > 8) {
+            Debug.log("[CropBreak] context not attached reason=out_of_range dx=" + dx + " dy=" + dy + " dz=" + dz);
+            return null;
+        }
+
+        return context;
     }
 
     public static void registerPendingUseHarvest(PlayerRef playerRef, int x, int y, int z, String heldItemId, String cachedBlockId) {
@@ -386,30 +436,6 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
     }
 
 
-    private static PendingPrimaryHarvestContext consumePendingPrimarySickleHarvest(PlayerRef playerRef, Vector3i target) {
-        String key = playerRef.getUuid().toString();
-        PendingPrimaryHarvestContext context = PENDING_PRIMARY_HARVESTS.get(key);
-        if (context == null) {
-            return null;
-        }
-
-        long age = System.currentTimeMillis() - context.createdAtMs();
-        if (age > PENDING_PRIMARY_WINDOW_MS) {
-            PENDING_PRIMARY_HARVESTS.remove(key);
-            return null;
-        }
-
-        if (target != null && context.x() != 0 && context.y() != 0 && context.z() != 0) {
-            int dx = Math.abs(target.getX() - context.x());
-            int dy = Math.abs(target.getY() - context.y());
-            int dz = Math.abs(target.getZ() - context.z());
-            if (dx > 5 || dy > 2 || dz > 5) {
-                return null;
-            }
-        }
-
-        return context;
-    }
 
     public static void markBreakEventObserved(PlayerRef playerRef, int x, int y, int z, String source) {
         String key = playerRef.getUuid() + ":" + x + ":" + y + ":" + z;
@@ -533,7 +559,7 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
     private record PendingUseHarvestContext(String heldItemId, String cachedBlockId, long createdAtMs) {
     }
 
-    private record PendingPrimaryHarvestContext(String heldItemId, int x, int y, int z, long createdAtMs) {
+    public record RecentSickleInteractionContext(long timestampMs, String heldItemId, int x, int y, int z, String interactionType) {
     }
 
     private static final class RadiusProcStats {

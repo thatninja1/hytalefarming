@@ -7,11 +7,9 @@ import com.hypixel.hytale.server.core.entity.InteractionContext;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.CooldownHandler;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.SimpleInstantInteraction;
-import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hypixel.hytale.protocol.InteractionType;
 import dev.hytalemodding.hytalefarming.Debug;
-import dev.hytalemodding.hytalefarming.ui.ThoriumHoeUpgradePage;
 import dev.hytalemodding.hytalefarming.util.FarmingTools;
 
 import javax.annotation.Nonnull;
@@ -47,15 +45,10 @@ public class HoeUpgradeMenuInteraction extends SimpleInstantInteraction {
         }
 
         if (interactionType == InteractionType.Secondary && FarmingTools.isValidFarmingTool(heldItem)) {
-            PlayerRef playerRef = commandBuffer.getComponent(ref, PlayerRef.getComponentType());
-            if (playerRef == null) {
-                Debug.log("Failed to open UI: PlayerRef component missing");
-                return;
-            }
-            player.getPageManager().openCustomPage(ref, commandBuffer.getStore(), new ThoriumHoeUpgradePage(playerRef));
-            Debug.log("Detected Secondary right-click with Farming sickle - opened upgrade UI");
-        } else {
-            Debug.log("Interaction did not match secondary farming-sickle requirement");
+            Debug.log("Secondary sickle interaction received; UI opening via interaction is disabled. Use /farming upgrade.");
+            return;
         }
+
+        Debug.log("Interaction did not match disabled-secondary-ui path");
     }
 }
