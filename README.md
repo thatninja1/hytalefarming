@@ -77,6 +77,7 @@ Each enchant supports:
 - Proc logic runs only for fully-grown crop blocks (`State_Definitions_StageFinal`).
 - Radius harvesting procs are per-block (independent rolls per crop block).
 - On Primary/Secondary sickle input, plugin snapshots the sickle area, verifies over multiple passes (~100ms, ~200ms, ~350ms), and invokes proc pipeline for positions that changed away from fully-grown state.
+- Primary/Secondary AOE proc chat is aggregated into a single summary message per swing (rewards still apply per crop).
 - Debug includes snapshot counts (`snapshotCount`, `fullyGrownCount`, `harvestedDetectedCount`, `procInvocationCount`) and radius summary windows (`processed=X fullyGrown=Y procs=Z`).
 - In mixed-radius harvests, only fully-grown crops are eligible.
 

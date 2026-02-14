@@ -159,6 +159,7 @@ public class InputPacketHook {
                     + " fullyGrownCount=" + snapshotFullyGrown.size() + " player=" + playerRef.getUsername());
 
             Set<Vector3i> processed = new HashSet<>();
+            TokenFinderBreakBlockSystem.ProcBatch procBatch = new TokenFinderBreakBlockSystem.ProcBatch();
             long[] delays = new long[]{100L, 200L, 350L};
 
             for (int i = 0; i < delays.length; i++) {
@@ -194,7 +195,8 @@ public class InputPacketHook {
                                 heldItemId,
                                 beforeBlockId,
                                 pos,
-                                "PrimarySickleHarvest"
+                                "PrimarySickleHarvest",
+                                procBatch
                         );
                         invoked++;
                     }
@@ -207,6 +209,15 @@ public class InputPacketHook {
                             + " procInvocationCount=" + invoked
                             + " remainingUnchangedCount=" + remainingUnchanged
                             + " player=" + playerRef.getUsername());
+
+                    if (passIndex == delays.length) {
+                        plugin.getTokenFinderBreakBlockSystem().sendBatchSummaryIfAny(
+                                player,
+                                playerRef,
+                                procBatch,
+                                "PrimarySickleHarvest"
+                        );
+                    }
                 }), delayMs, TimeUnit.MILLISECONDS);
             }
         });

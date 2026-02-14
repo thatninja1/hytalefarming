@@ -26,6 +26,7 @@ import javax.annotation.Nonnull;
 import java.util.List;
 import java.util.Collection;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -110,7 +111,7 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         }
 
         moveDropsToInventoryIfPossible(event, player, source, blockId);
-        handleCropBreakAndProcs(player, playerRef, resolvedHeldItemId, blockId, target, source);
+        handleCropBreakAndProcs(player, playerRef, resolvedHeldItemId, blockId, target, source, null);
     }
 
     public void handleCropBreakAndProcs(Player player,
@@ -119,6 +120,16 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                                         String brokenBlockId,
                                         Vector3i blockPos,
                                         String source) {
+        handleCropBreakAndProcs(player, playerRef, heldItemId, brokenBlockId, blockPos, source, null);
+    }
+
+    public void handleCropBreakAndProcs(Player player,
+                                        PlayerRef playerRef,
+                                        String heldItemId,
+                                        String brokenBlockId,
+                                        Vector3i blockPos,
+                                        String source,
+                                        ProcBatch batch) {
         String normalizedBlockId = normalizeBlockId(brokenBlockId);
 
         Debug.log("[CropBreak] source=" + source
@@ -154,19 +165,23 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
             return;
         }
 
+        if (batch != null) {
+            batch.cropsProcessed++;
+        }
+
         int tokenFinderLevel = plugin.getTokenService().enchantLevel(playerRef.getUuid(), playerRef.getUsername(), "token_finder");
         int fortuneLevel = plugin.getTokenService().enchantLevel(playerRef.getUuid(), playerRef.getUsername(), "fortune");
         int keyfinderLevel = plugin.getTokenService().enchantLevel(playerRef.getUuid(), playerRef.getUsername(), "keyfinder");
 
         Debug.log("[Drops] Could not intercept drop list; leaving vanilla drops for blockId=" + normalizedBlockId + " source=" + source);
 
-        boolean tokenProc = processTokenFinder(player, playerRef, tokenFinderLevel, source);
-        boolean fortuneProc = processFortune(player, normalizedBlockId, fortuneLevel, source);
-        boolean keyfinderProc = processKeyfinder(player, playerRef, keyfinderLevel, source);
+        boolean tokenProc = processTokenFinder(player, playerRef, tokenFinderLevel, source, batch);
+        boolean fortuneProc = processFortune(player, normalizedBlockId, fortuneLevel, source, batch);
+        boolean keyfinderProc = processKeyfinder(player, playerRef, keyfinderLevel, source, batch);
         logRadiusSummary(playerRef, source, validHarvestable, tokenProc || fortuneProc || keyfinderProc);
     }
 
-    private boolean processTokenFinder(Player player, PlayerRef playerRef, int level, String source) {
+    private boolean processTokenFinder(Player player, PlayerRef playerRef, int level, String source, ProcBatch batch) {
         EnchantsConfig.TokenFinder cfg = plugin.getEnchantsConfig().getTokenFinder();
         int maxLevel = cfg.getMaxLevel();
         if (!rollProc("token_finder", level, maxLevel, cfg.getEnchantProc(), source)) {
@@ -188,13 +203,16 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                 "crateId", "",
                 "extra", ""
         ));
-        if (!procMessage.isBlank()) {
+        if (batch != null) {
+            batch.totalTokensAwarded += awarded;
+            batch.tokenFinderProcCount++;
+        } else if (!procMessage.isBlank()) {
             player.sendMessage(Message.raw(procMessage));
         }
         return true;
     }
 
-    private boolean processFortune(Player player, String blockId, int level, String source) {
+    private boolean processFortune(Player player, String blockId, int level, String source, ProcBatch batch) {
         EnchantsConfig.Fortune cfg = plugin.getEnchantsConfig().getFortune();
         int maxLevel = cfg.getMaxLevel();
         if (!rollProc("fortune", level, maxLevel, cfg.getEnchantProc(), source)) {
@@ -229,7 +247,11 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                     "crateId", "",
                     "extra", String.valueOf(extraAmount)
             ));
-            if (!procMessage.isBlank()) {
+            if (batch != null) {
+                batch.totalFortuneExtra += extraAmount;
+                batch.fortuneProcCount++;
+                batch.fortuneByItem.merge(itemId, extraAmount, Integer::sum);
+            } else if (!procMessage.isBlank()) {
                 player.sendMessage(Message.raw(procMessage));
             }
             return true;
@@ -237,7 +259,7 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         return false;
     }
 
-    private boolean processKeyfinder(Player player, PlayerRef playerRef, int level, String source) {
+    private boolean processKeyfinder(Player player, PlayerRef playerRef, int level, String source, ProcBatch batch) {
         EnchantsConfig.Keyfinder cfg = plugin.getEnchantsConfig().getKeyfinder();
         int maxLevel = cfg.getMaxLevel();
         if (!rollProc("keyfinder", level, maxLevel, cfg.getEnchantProc(), source)) {
@@ -266,10 +288,82 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                 "crateId", chosenCrate.getCrateId(),
                 "extra", ""
         ));
-        if (!procMessage.isBlank()) {
+        if (batch != null) {
+            batch.keyfinderProcCount++;
+            batch.keyfinderByCrate.merge(chosenCrate.getCrateId(), 1, Integer::sum);
+        } else if (!procMessage.isBlank()) {
             player.sendMessage(Message.raw(procMessage));
         }
         return true;
+    }
+
+    public void sendBatchSummaryIfAny(Player player, PlayerRef playerRef, ProcBatch batch, String source) {
+        if (player == null || batch == null) {
+            return;
+        }
+        if (batch.totalTokensAwarded <= 0 && batch.totalFortuneExtra <= 0 && batch.keyfinderByCrate.isEmpty()) {
+            return;
+        }
+
+        List<String> lines = new ArrayList<>();
+        if (batch.totalTokensAwarded > 0) {
+            String line = MessageFormatter.format(plugin.getEnchantsConfig().getTokenFinder().getProcMessage(), Map.of(
+                    "amount", String.valueOf(batch.totalTokensAwarded),
+                    "currency", plugin.getTokensConfig().getCurrencyName(),
+                    "enchant", "Token Finder",
+                    "level", "",
+                    "crateId", "",
+                    "extra", ""
+            ));
+            if (!line.isBlank()) {
+                lines.add(line);
+            }
+        }
+
+        if (batch.totalFortuneExtra > 0) {
+            String line = MessageFormatter.format(plugin.getEnchantsConfig().getFortune().getProcMessage(), Map.of(
+                    "amount", "",
+                    "currency", plugin.getTokensConfig().getCurrencyName(),
+                    "enchant", "Fortune",
+                    "level", "",
+                    "crateId", "",
+                    "extra", String.valueOf(batch.totalFortuneExtra)
+            ));
+            if (!line.isBlank()) {
+                lines.add(line);
+            }
+        }
+
+        if (!batch.keyfinderByCrate.isEmpty()) {
+            String crateSummary = batch.keyfinderByCrate.entrySet().stream()
+                    .map(e -> e.getKey() + " x" + e.getValue())
+                    .reduce((a, b) -> a + ", " + b)
+                    .orElse("");
+            String line = MessageFormatter.format(plugin.getEnchantsConfig().getKeyfinder().getProcMessage(), Map.of(
+                    "amount", "",
+                    "currency", plugin.getTokensConfig().getCurrencyName(),
+                    "enchant", "Keyfinder",
+                    "level", "",
+                    "crateId", crateSummary,
+                    "extra", ""
+            ));
+            if (!line.isBlank()) {
+                lines.add(line);
+            }
+        }
+
+        if (lines.isEmpty()) {
+            return;
+        }
+
+        String aggregated = String.join("\n", lines);
+        player.sendMessage(Message.raw(aggregated));
+
+        Debug.log("[ProcBatch] source=" + source + " player=" + playerRef.getUsername()
+                + " cropsProcessed=" + batch.cropsProcessed
+                + " tokenTotal=" + batch.totalTokensAwarded
+                + " fortuneExtra=" + batch.totalFortuneExtra
+                + " keyfinderKeys=" + batch.keyfinderByCrate);
     }
 
     private EnchantsConfig.Crate chooseCrate(List<EnchantsConfig.Crate> crates) {
@@ -560,6 +654,17 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
     }
 
     public record RecentSickleInteractionContext(long timestampMs, String heldItemId, int x, int y, int z, String interactionType) {
+    }
+
+    public static final class ProcBatch {
+        public long totalTokensAwarded;
+        public int tokenFinderProcCount;
+        public int totalFortuneExtra;
+        public int fortuneProcCount;
+        public int keyfinderProcCount;
+        public int cropsProcessed;
+        public final Map<String, Integer> fortuneByItem = new HashMap<>();
+        public final Map<String, Integer> keyfinderByCrate = new HashMap<>();
     }
 
     private static final class RadiusProcStats {
