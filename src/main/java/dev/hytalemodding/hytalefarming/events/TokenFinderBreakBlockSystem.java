@@ -10,6 +10,7 @@ import com.hypixel.hytale.component.system.EntityEventSystem;
 import com.hypixel.hytale.math.vector.Vector3i;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.command.system.CommandManager;
+import com.hypixel.hytale.server.core.console.ConsoleSender;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.event.events.ecs.BreakBlockEvent;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
@@ -277,8 +278,10 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                 .replace("<crateid>", chosenCrate.getCrateId());
 
         String normalizedCommand = finalCommand.startsWith("/") ? finalCommand.substring(1) : finalCommand;
-        Debug.log("Keyfinder proc success -> source=" + source + " selected crateId=" + chosenCrate.getCrateId() + " command=" + normalizedCommand);
-        CommandManager.get().handleCommand(player, normalizedCommand);
+        Debug.log("Keyfinder executing console command: " + normalizedCommand
+                + " for player=" + playerRef.getUsername()
+                + " crateId=" + chosenCrate.getCrateId());
+        CommandManager.get().handleCommand(ConsoleSender.INSTANCE, normalizedCommand);
 
         String procMessage = MessageFormatter.format(cfg.getProcMessage(), Map.of(
                 "amount", "",
