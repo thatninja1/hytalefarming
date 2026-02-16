@@ -43,7 +43,8 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
     private static final long PENDING_USE_WINDOW_MS = 1200L;
     private static final long RECENT_INTERACTION_WINDOW_MS = 500L;
     private static final long RADIUS_LOG_WINDOW_MS = 600L;
-    private static final long ETERNAL_GROWTH_DELAY_MS = 100L;
+    private static final long ETERNAL_GROWTH_ATTEMPT_DELAY_MS = 75L;
+    private static final int ETERNAL_GROWTH_MAX_ATTEMPTS = 3;
     private static final Map<String, Long> RECENT_HARVEST_REWARDS = new ConcurrentHashMap<>();
     private static final Map<String, PendingUseHarvestContext> PENDING_USE_HARVESTS = new ConcurrentHashMap<>();
     private static final Map<String, RecentSickleInteractionContext> RECENT_SICKLE_INTERACTIONS = new ConcurrentHashMap<>();
@@ -337,26 +338,58 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
             return false;
         }
 
-        World world = entityStore.getWorld();
         int tierCount = ((Math.max(1, level) - 1) / 10) + 1;
 
+        scheduleEternalGrowthAttempt(ref, store, entityStore.getWorld(), blockPos, harvestedBlockId, source, batch, cfg, level, maxLevel, tierCount, 1);
+
+        return true;
+    }
+
+    private void scheduleEternalGrowthAttempt(Ref<EntityStore> ref,
+                                              Store<EntityStore> store,
+                                              World world,
+                                              Vector3i blockPos,
+                                              String harvestedBlockId,
+                                              String source,
+                                              ProcBatch batch,
+                                              EnchantsConfig.EternalGrowth cfg,
+                                              int level,
+                                              int maxLevel,
+                                              int tierCount,
+                                              int attempt) {
+        long delayMs = ETERNAL_GROWTH_ATTEMPT_DELAY_MS * attempt;
         ETERNAL_GROWTH_VERIFIER.schedule(() -> world.execute(() -> {
-            String beforeBlockId = "<unknown>";
+            String currentBlockId = "<unknown>";
             if (world.getBlockType(blockPos.getX(), blockPos.getY(), blockPos.getZ()) != null) {
-                beforeBlockId = normalizeBlockId(world.getBlockType(blockPos.getX(), blockPos.getY(), blockPos.getZ()).getId());
+                currentBlockId = normalizeBlockId(world.getBlockType(blockPos.getX(), blockPos.getY(), blockPos.getZ()).getId());
             }
 
-            if (!isEternalStage1Crop(beforeBlockId)) {
-                Debug.log("[EternalGrowth] source=" + source + " procResult=false reason=post_harvest_not_stage1 blockPos="
-                        + blockPos.getX() + "," + blockPos.getY() + "," + blockPos.getZ()
-                        + " beforeBlockId=" + beforeBlockId + " harvestedBlockId=" + harvestedBlockId);
+            boolean chunkLoaded = isChunkLoaded(world, blockPos);
+            Debug.log("[EternalGrowth] source=" + source
+                    + " world=" + world.getName()
+                    + " pos=" + blockPos.getX() + "," + blockPos.getY() + "," + blockPos.getZ()
+                    + " attempt=" + attempt + "/" + ETERNAL_GROWTH_MAX_ATTEMPTS
+                    + " delayMs=" + delayMs
+                    + " blockId=" + currentBlockId
+                    + " chunkLoaded=" + chunkLoaded
+                    + " setBlockPath=" + (chunkLoaded ? "World#setBlock -> World#setBlock(...,rotation=0)" : "deferred_wait_chunk"));
+
+            if (!isEternalStage1Crop(currentBlockId)) {
+                if (attempt < ETERNAL_GROWTH_MAX_ATTEMPTS) {
+                    scheduleEternalGrowthAttempt(ref, store, world, blockPos, harvestedBlockId, source, batch, cfg, level, maxLevel, tierCount, attempt + 1);
+                } else {
+                    Debug.log("[EternalGrowth] source=" + source + " procResult=false reason=post_harvest_not_stage1_after_retries"
+                            + " harvestedBlockId=" + harvestedBlockId
+                            + " finalObservedBlockId=" + currentBlockId
+                            + " attempts=" + ETERNAL_GROWTH_MAX_ATTEMPTS);
+                }
                 return;
             }
 
-            String stagePrefix = beforeBlockId.substring(0, beforeBlockId.length() - "_Stage1".length());
+            String stagePrefix = currentBlockId.substring(0, currentBlockId.length() - "_Stage1".length());
             int currentStage = 1;
             boolean advancedAny = false;
-            String afterBlockId = beforeBlockId;
+            String afterBlockId = currentBlockId;
 
             for (int rollIndex = 1; rollIndex <= tierCount; rollIndex++) {
                 if (!rollProc("eternal_growth", level, maxLevel, cfg.getEnchantProc(), source)) {
@@ -384,7 +417,7 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
 
             Debug.log("[EternalGrowth] source=" + source
                     + " blockPos=" + blockPos.getX() + "," + blockPos.getY() + "," + blockPos.getZ()
-                    + " beforeBlockId=" + beforeBlockId
+                    + " beforeBlockId=" + currentBlockId
                     + " afterBlockId=" + afterBlockId
                     + " procResult=" + advancedAny
                     + " tierCount=" + tierCount
@@ -411,9 +444,7 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
             } else if (player != null && !procMessage.isBlank()) {
                 player.sendMessage(Message.raw(procMessage));
             }
-        }), ETERNAL_GROWTH_DELAY_MS, TimeUnit.MILLISECONDS);
-
-        return true;
+        }), delayMs, TimeUnit.MILLISECONDS);
     }
 
     private boolean isEternalStageFinalCrop(String blockId) {
@@ -436,6 +467,17 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
             world.setBlock(pos.getX(), pos.getY(), pos.getZ(), blockId);
             return true;
         } catch (Exception ex) {
+            Debug.log("[EternalGrowth] setBlock primary path failed source=" + source
+                    + " method=" + methodTried
+                    + " targetBlockId=" + blockId
+                    + " error=" + ex.getMessage());
+        }
+
+        methodTried = "World#setBlock(int,int,int,String,int)";
+        try {
+            world.setBlock(pos.getX(), pos.getY(), pos.getZ(), blockId, 0);
+            return true;
+        } catch (Exception ex) {
             Debug.warn("[EternalGrowth] failed setBlock source=" + source
                     + " worldClass=" + world.getClass().getName()
                     + " targetBlockId=" + blockId
@@ -443,8 +485,15 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                     + " error=" + ex.getMessage());
             Debug.log("[EternalGrowth] setBlock candidates worldClass=" + world.getClass().getName()
                     + " methods=" + listBlockMutationCandidates(world));
-            return false;
         }
+        return false;
+    }
+
+    private boolean isChunkLoaded(World world, Vector3i pos) {
+        int chunkX = pos.getX() >> 4;
+        int chunkZ = pos.getZ() >> 4;
+        long index = ((long) chunkX << 32) | (chunkZ & 0xffffffffL);
+        return world.getChunkIfLoaded(index) != null;
     }
 
     public void sendBatchSummaryIfAny(Player player, PlayerRef playerRef, ProcBatch batch, String source) {
