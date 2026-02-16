@@ -587,6 +587,21 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
     }
 
     private SetBlockResult trySetBlockById(World world, ChunkProbe chunkProbe, Vector3i pos, String blockId, String source) {
+        SetBlockResult directResult = trySetRawBlockById(world, chunkProbe, pos, blockId, source);
+        if (directResult.success()) {
+            return directResult;
+        }
+        if (directResult.retriable()) {
+            return directResult;
+        }
+        if (!blockId.contains("_State_Definitions_") || !isUnknownKeyError(directResult.reason())) {
+            return directResult;
+        }
+
+        return trySetViaInteractionStateFallback(world, chunkProbe, pos, blockId, source);
+    }
+
+    private SetBlockResult trySetRawBlockById(World world, ChunkProbe chunkProbe, Vector3i pos, String blockId, String source) {
         if (chunkProbe.chunk() != null) {
             int localX = pos.getX() & 15;
             int localZ = pos.getZ() & 15;
@@ -656,6 +671,100 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
             Debug.log("[EternalGrowth] setBlock candidates worldClass=" + world.getClass().getName()
                     + " methods=" + listBlockMutationCandidates(world));
             return new SetBlockResult(false, methodTried, ex.getClass().getSimpleName() + ": " + ex.getMessage(), true);
+        }
+    }
+
+    private SetBlockResult trySetViaInteractionStateFallback(World world,
+                                                             ChunkProbe chunkProbe,
+                                                             Vector3i pos,
+                                                             String stageStyleBlockId,
+                                                             String source) {
+        int idx = stageStyleBlockId.indexOf("_State_Definitions_");
+        if (idx < 0) {
+            return new SetBlockResult(false, "interaction_state_fallback", "invalid_stage_style_id", false);
+        }
+
+        String baseBlockId = stageStyleBlockId.substring(0, idx);
+        String stateKey = stageStyleBlockId.substring(idx + "_State_Definitions_".length());
+
+        SetBlockResult basePlacement = trySetRawBlockById(world, chunkProbe, pos, baseBlockId, source);
+        if (!basePlacement.success()) {
+            return new SetBlockResult(false,
+                    basePlacement.path(),
+                    "base_block_failed:" + basePlacement.reason(),
+                    basePlacement.retriable());
+        }
+
+        Object blockType = world.getBlockType(pos.getX(), pos.getY(), pos.getZ());
+        if (blockType == null) {
+            return new SetBlockResult(false, "interaction_state_fallback", "missing_block_type_after_base", true);
+        }
+
+        for (String stateCandidate : List.of(stateKey, "State_Definitions_" + stateKey)) {
+            SetBlockResult worldStateResult = tryInvokeInteractionState(world, pos, blockType, stateCandidate);
+            if (worldStateResult.success()) {
+                Debug.log("[EternalGrowth] set via interaction state source=" + source
+                        + " baseId=" + baseBlockId
+                        + " state=" + stateKey
+                        + " candidate=" + stateCandidate);
+                return worldStateResult;
+            }
+
+            if (chunkProbe.chunk() != null) {
+                SetBlockResult chunkAccessorResult = tryInvokeInteractionStateFromChunkAccessor(chunkProbe.chunk(), pos, blockType, stateCandidate);
+                if (chunkAccessorResult.success()) {
+                    Debug.log("[EternalGrowth] set via interaction state source=" + source
+                            + " baseId=" + baseBlockId
+                            + " state=" + stateKey
+                            + " candidate=" + stateCandidate);
+                    return chunkAccessorResult;
+                }
+            }
+        }
+
+        return new SetBlockResult(false,
+                "interaction_state_fallback",
+                "unknown_key_and_interaction_state_failed:" + stageStyleBlockId,
+                false);
+    }
+
+    private SetBlockResult tryInvokeInteractionState(Object target, Vector3i pos, Object blockType, String stateCandidate) {
+        for (Method method : target.getClass().getMethods()) {
+            if (!"setBlockInteractionState".equals(method.getName())) {
+                continue;
+            }
+
+            Class<?>[] params = method.getParameterTypes();
+            if (params.length != 3 || params[0] != Vector3i.class || !params[2].isAssignableFrom(String.class)) {
+                continue;
+            }
+            if (!params[1].isInstance(blockType)) {
+                continue;
+            }
+
+            try {
+                method.invoke(target, pos, blockType, stateCandidate);
+                return new SetBlockResult(true, target.getClass().getSimpleName() + ".setBlockInteractionState", "ok", false);
+            } catch (Throwable ignored) {
+                // try next candidate
+            }
+        }
+        return new SetBlockResult(false, target.getClass().getSimpleName() + ".setBlockInteractionState", "invoke_failed", false);
+    }
+
+    private SetBlockResult tryInvokeInteractionStateFromChunkAccessor(Object chunk,
+                                                                      Vector3i pos,
+                                                                      Object blockType,
+                                                                      String stateCandidate) {
+        try {
+            Method accessorMethod = chunk.getClass().getMethod("getChunkAccessor");
+            Object accessor = accessorMethod.invoke(chunk);
+            if (accessor == null) {
+                return new SetBlockResult(false, "chunkAccessor.setBlockInteractionState", "missing_accessor", false);
+            }
+            return tryInvokeInteractionState(accessor, pos, blockType, stateCandidate);
+        } catch (Throwable ignored) {
+            return new SetBlockResult(false, "chunkAccessor.setBlockInteractionState", "accessor_unavailable", false);
         }
     }
 
