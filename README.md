@@ -93,6 +93,10 @@ Each enchant supports:
 ## Eternal Growth
 - Enchant key: `eternal_growth` (display: `Eternal Growth`).
 - Applies only to eternal crops (`_Block_Eternal_State_Definitions_...`).
-- On a successful proc, harvested eternal crops that reset to `_Stage1` are immediately advanced to `_Stage2`.
+- After harvest resets eternal crops to `_Stage1`, Eternal Growth performs tiered stage-advance rolls:
+  - Levels `1-10`: 1 roll (can advance to `_Stage2`)
+  - Levels `11-20`: 2 rolls (can advance further, e.g. `_Stage3`)
+  - Levels `21-30`: 3 rolls, and so on (`tierCount = ((level - 1) / 10) + 1`)
+- Each successful roll advances by one stage, and advancement is capped at available stages (never beyond `StageFinal`).
 - Works for `Use` harvest and Primary/Secondary AOE harvest processing.
 - In AOE batch mode, Eternal Growth messages are aggregated into the single swing summary using `{count}`.

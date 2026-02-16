@@ -139,7 +139,7 @@ public class EnchantsConfig {
     }
 
     public static class EternalGrowth {
-        private int maxLevel = 5;
+        private int maxLevel = 20;
         private int baseUpgradeCost = 30;
         private int upgradeCostIncrease = 100;
         private float enchantProc = 0.25f;

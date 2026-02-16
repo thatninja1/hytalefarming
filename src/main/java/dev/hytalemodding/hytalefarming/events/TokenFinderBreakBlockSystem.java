@@ -32,7 +32,10 @@ import java.util.HashMap;
 import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 
 public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, BreakBlockEvent> {
 
@@ -40,11 +43,13 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
     private static final long PENDING_USE_WINDOW_MS = 1200L;
     private static final long RECENT_INTERACTION_WINDOW_MS = 500L;
     private static final long RADIUS_LOG_WINDOW_MS = 600L;
+    private static final long ETERNAL_GROWTH_DELAY_MS = 100L;
     private static final Map<String, Long> RECENT_HARVEST_REWARDS = new ConcurrentHashMap<>();
     private static final Map<String, PendingUseHarvestContext> PENDING_USE_HARVESTS = new ConcurrentHashMap<>();
     private static final Map<String, RecentSickleInteractionContext> RECENT_SICKLE_INTERACTIONS = new ConcurrentHashMap<>();
     private static final Map<String, Long> RECENT_BREAK_EVENTS = new ConcurrentHashMap<>();
     private static final Map<String, RadiusProcStats> RADIUS_PROC_STATS = new ConcurrentHashMap<>();
+    private static final ScheduledExecutorService ETERNAL_GROWTH_VERIFIER = Executors.newSingleThreadScheduledExecutor();
 
     private final HytaleFarmingPlugin plugin;
 
@@ -333,53 +338,81 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         }
 
         World world = entityStore.getWorld();
-        String beforeBlockId = "<unknown>";
-        if (world.getBlockType(blockPos.getX(), blockPos.getY(), blockPos.getZ()) != null) {
-            beforeBlockId = normalizeBlockId(world.getBlockType(blockPos.getX(), blockPos.getY(), blockPos.getZ()).getId());
-        }
+        int tierCount = ((Math.max(1, level) - 1) / 10) + 1;
 
-        if (!isEternalStage1Crop(beforeBlockId)) {
-            Debug.log("[EternalGrowth] source=" + source + " procResult=false reason=post_harvest_not_stage1 blockPos="
-                    + blockPos.getX() + "," + blockPos.getY() + "," + blockPos.getZ()
-                    + " beforeBlockId=" + beforeBlockId + " harvestedBlockId=" + harvestedBlockId);
-            return false;
-        }
+        ETERNAL_GROWTH_VERIFIER.schedule(() -> world.execute(() -> {
+            String beforeBlockId = "<unknown>";
+            if (world.getBlockType(blockPos.getX(), blockPos.getY(), blockPos.getZ()) != null) {
+                beforeBlockId = normalizeBlockId(world.getBlockType(blockPos.getX(), blockPos.getY(), blockPos.getZ()).getId());
+            }
 
-        String stage2BlockId = beforeBlockId.substring(0, beforeBlockId.length() - "_Stage1".length()) + "_Stage2";
-        boolean changed = trySetBlockById(world, blockPos, stage2BlockId);
-        String afterBlockId = "<unknown>";
-        if (world.getBlockType(blockPos.getX(), blockPos.getY(), blockPos.getZ()) != null) {
-            afterBlockId = normalizeBlockId(world.getBlockType(blockPos.getX(), blockPos.getY(), blockPos.getZ()).getId());
-        }
+            if (!isEternalStage1Crop(beforeBlockId)) {
+                Debug.log("[EternalGrowth] source=" + source + " procResult=false reason=post_harvest_not_stage1 blockPos="
+                        + blockPos.getX() + "," + blockPos.getY() + "," + blockPos.getZ()
+                        + " beforeBlockId=" + beforeBlockId + " harvestedBlockId=" + harvestedBlockId);
+                return;
+            }
 
-        boolean advanced = changed && stage2BlockId.equals(afterBlockId);
-        Debug.log("[EternalGrowth] source=" + source
-                + " blockPos=" + blockPos.getX() + "," + blockPos.getY() + "," + blockPos.getZ()
-                + " beforeBlockId=" + beforeBlockId
-                + " afterBlockId=" + afterBlockId
-                + " procResult=" + advanced);
+            String stagePrefix = beforeBlockId.substring(0, beforeBlockId.length() - "_Stage1".length());
+            int currentStage = 1;
+            boolean advancedAny = false;
+            String afterBlockId = beforeBlockId;
 
-        if (!advanced) {
-            return false;
-        }
+            for (int rollIndex = 1; rollIndex <= tierCount; rollIndex++) {
+                if (!rollProc("eternal_growth", level, maxLevel, cfg.getEnchantProc(), source)) {
+                    continue;
+                }
 
-        String procMessage = MessageFormatter.format(cfg.getProcMessage(), Map.of(
-                "amount", "",
-                "currency", plugin.getTokensConfig().getCurrencyName(),
-                "enchant", "Eternal Growth",
-                "level", String.valueOf(level),
-                "crateId", "",
-                "extra", "",
-                "count", "1"
-        ));
+                int targetStage = currentStage + 1;
+                String targetBlockId = stagePrefix + "_Stage" + targetStage;
+                if (!trySetBlockById(world, blockPos, targetBlockId, source)) {
+                    break;
+                }
 
-        Player player = store.getComponent(ref, Player.getComponentType());
-        if (batch != null) {
-            batch.eternalGrowthCount++;
-            batch.eternalGrowthProcCount++;
-        } else if (player != null && !procMessage.isBlank()) {
-            player.sendMessage(Message.raw(procMessage));
-        }
+                afterBlockId = normalizeBlockId(world.getBlockType(blockPos.getX(), blockPos.getY(), blockPos.getZ()).getId());
+                if (!targetBlockId.equals(afterBlockId)) {
+                    Debug.log("[EternalGrowth] source=" + source + " procResult=false reason=set_mismatch"
+                            + " blockPos=" + blockPos.getX() + "," + blockPos.getY() + "," + blockPos.getZ()
+                            + " attemptedTargetBlockId=" + targetBlockId
+                            + " observedAfterBlockId=" + afterBlockId);
+                    break;
+                }
+
+                currentStage = targetStage;
+                advancedAny = true;
+            }
+
+            Debug.log("[EternalGrowth] source=" + source
+                    + " blockPos=" + blockPos.getX() + "," + blockPos.getY() + "," + blockPos.getZ()
+                    + " beforeBlockId=" + beforeBlockId
+                    + " afterBlockId=" + afterBlockId
+                    + " procResult=" + advancedAny
+                    + " tierCount=" + tierCount
+                    + " finalStage=" + currentStage);
+
+            if (!advancedAny) {
+                return;
+            }
+
+            String procMessage = MessageFormatter.format(cfg.getProcMessage(), Map.of(
+                    "amount", "",
+                    "currency", plugin.getTokensConfig().getCurrencyName(),
+                    "enchant", "Eternal Growth",
+                    "level", String.valueOf(level),
+                    "crateId", "",
+                    "extra", "",
+                    "count", "1"
+            ));
+
+            Player player = store.getComponent(ref, Player.getComponentType());
+            if (batch != null) {
+                batch.eternalGrowthCount++;
+                batch.eternalGrowthProcCount++;
+            } else if (player != null && !procMessage.isBlank()) {
+                player.sendMessage(Message.raw(procMessage));
+            }
+        }), ETERNAL_GROWTH_DELAY_MS, TimeUnit.MILLISECONDS);
+
         return true;
     }
 
@@ -397,40 +430,21 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                 && normalized.endsWith("_Stage1");
     }
 
-    private boolean trySetBlockById(World world, Vector3i pos, String blockId) {
-        for (String methodName : List.of("setBlockType", "setBlock", "setBlockId", "setBlockTypeById")) {
-            for (Method method : world.getClass().getMethods()) {
-                if (!method.getName().equals(methodName)) {
-                    continue;
-                }
-                Class<?>[] params = method.getParameterTypes();
-                try {
-                    if (params.length == 4
-                            && params[0] == int.class
-                            && params[1] == int.class
-                            && params[2] == int.class) {
-                        Object blockArg = convertBlockArg(params[3], blockId);
-                        if (blockArg != null) {
-                            method.invoke(world, pos.getX(), pos.getY(), pos.getZ(), blockArg);
-                            return true;
-                        }
-                    }
-                    if (params.length == 2
-                            && params[0] == Vector3i.class) {
-                        Object blockArg = convertBlockArg(params[1], blockId);
-                        if (blockArg != null) {
-                            method.invoke(world, pos, blockArg);
-                            return true;
-                        }
-                    }
-                } catch (Exception ignored) {
-                    // try next method signature
-                }
-            }
+    private boolean trySetBlockById(World world, Vector3i pos, String blockId, String source) {
+        String methodTried = "World#setBlock(int,int,int,String)";
+        try {
+            world.setBlock(pos.getX(), pos.getY(), pos.getZ(), blockId);
+            return true;
+        } catch (Exception ex) {
+            Debug.warn("[EternalGrowth] failed setBlock source=" + source
+                    + " worldClass=" + world.getClass().getName()
+                    + " targetBlockId=" + blockId
+                    + " method=" + methodTried
+                    + " error=" + ex.getMessage());
+            Debug.log("[EternalGrowth] setBlock candidates worldClass=" + world.getClass().getName()
+                    + " methods=" + listBlockMutationCandidates(world));
+            return false;
         }
-
-        Debug.warn("[EternalGrowth] unable to set Stage2 block; no compatible world setBlock API found");
-        return false;
     }
 
     public void sendBatchSummaryIfAny(Player player, PlayerRef playerRef, ProcBatch batch, String source) {
@@ -802,28 +816,16 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
     }
 
 
-    private Object convertBlockArg(Class<?> targetType, String blockId) {
-        if (targetType == String.class || targetType == CharSequence.class || targetType == Object.class) {
-            return blockId;
+    private String listBlockMutationCandidates(World world) {
+        List<String> candidates = new ArrayList<>();
+        for (Method method : world.getClass().getMethods()) {
+            String lower = method.getName().toLowerCase();
+            if ((lower.contains("set") || lower.contains("place") || lower.contains("update"))
+                    && (lower.contains("block") || lower.contains("state"))) {
+                candidates.add(method.toGenericString());
+            }
         }
-        if (targetType.isAssignableFrom(String.class)) {
-            return blockId;
-        }
-        try {
-            Method ofMethod = targetType.getMethod("of", String.class);
-            return ofMethod.invoke(null, blockId);
-        } catch (Exception ignored) {
-        }
-        try {
-            Method fromIdMethod = targetType.getMethod("fromId", String.class);
-            return fromIdMethod.invoke(null, blockId);
-        } catch (Exception ignored) {
-        }
-        try {
-            return targetType.getConstructor(String.class).newInstance(blockId);
-        } catch (Exception ignored) {
-        }
-        return null;
+        return candidates.toString();
     }
 
     @Override
