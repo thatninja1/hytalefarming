@@ -450,6 +450,7 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
             String chosenStageTarget = "<none>";
             String chosenSetBlockPath = "<none>";
             String failureReason = "none";
+            boolean lastMutationRetriable = true;
 
             for (int rollIndex = 1; rollIndex <= tierCount; rollIndex++) {
                 boolean tierRoll = rollProc("eternal_growth", level, maxLevel, cfg.getEnchantProc(), source);
@@ -471,6 +472,31 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                     SetBlockResult setBlockResult = trySetBlockById(world, chunkProbe, resolvedPos, targetBlockId, source);
                     chosenSetBlockPath = setBlockResult.path();
                     if (!setBlockResult.success()) {
+                        lastMutationRetriable = setBlockResult.retriable();
+
+                        if (!setBlockResult.retriable() && isUnknownKeyError(setBlockResult.reason())) {
+                            String stageFinalTarget = stagePrefix + "_StageFinal";
+                            Debug.log("[EternalGrowth] unknown stage id fallback source=" + source
+                                    + " invalidTarget=" + targetBlockId
+                                    + " fallbackTarget=" + stageFinalTarget);
+
+                            SetBlockResult finalFallbackResult = trySetBlockById(world, chunkProbe, resolvedPos, stageFinalTarget, source);
+                            chosenSetBlockPath = finalFallbackResult.path();
+                            chosenStageTarget = stageFinalTarget;
+                            if (finalFallbackResult.success()) {
+                                afterBlockId = getBlockIdAt(world, resolvedPos);
+                                if (stageFinalTarget.equals(afterBlockId)) {
+                                    advancedAny = true;
+                                    currentStage = stageToTry;
+                                    failureReason = "none";
+                                    break;
+                                }
+                            }
+                            failureReason = "mutation_failed:" + finalFallbackResult.reason();
+                            lastMutationRetriable = finalFallbackResult.retriable();
+                            continue;
+                        }
+
                         failureReason = "mutation_failed:" + setBlockResult.reason();
                         continue;
                     }
@@ -502,7 +528,13 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                     + " finalStage=" + currentStage);
 
             if (!advancedAny) {
-                if (failureReason.startsWith("mutation_failed") && attempt < ETERNAL_GROWTH_MAX_ATTEMPTS) {
+                if (failureReason.startsWith("mutation_failed") && !lastMutationRetriable) {
+                    Debug.log("[EternalGrowth] permanent failure: unknown block id " + chosenStageTarget
+                            + ", stopping retries; consider StageFinal fallback");
+                    return;
+                }
+
+                if (failureReason.startsWith("mutation_failed") && lastMutationRetriable && attempt < ETERNAL_GROWTH_MAX_ATTEMPTS) {
                     scheduleEternalGrowthAttempt(ref,
                             store,
                             world,
@@ -567,14 +599,20 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                     if (params.length == 5 && params[0] == int.class && params[1] == int.class
                             && params[2] == int.class && params[3] == String.class && params[4] == int.class) {
                         method.invoke(chunkProbe.chunk(), localX, pos.getY(), localZ, blockId, 0);
-                        return new SetBlockResult(true, "chunk.setBlock(localX,y,localZ,blockId,rotation)", "ok");
+                        return new SetBlockResult(true, "chunk.setBlock(localX,y,localZ,blockId,rotation)", "ok", false);
                     }
                     if (params.length == 4 && params[0] == int.class && params[1] == int.class
                             && params[2] == int.class && params[3] == String.class) {
                         method.invoke(chunkProbe.chunk(), localX, pos.getY(), localZ, blockId);
-                        return new SetBlockResult(true, "chunk.setBlock(localX,y,localZ,blockId)", "ok");
+                        return new SetBlockResult(true, "chunk.setBlock(localX,y,localZ,blockId)", "ok", false);
                     }
-                } catch (Exception ex) {
+                } catch (Throwable ex) {
+                    if (isUnknownKeyError(ex.getMessage())) {
+                        return new SetBlockResult(false,
+                                "chunk.setBlock",
+                                ex.getClass().getSimpleName() + ": " + ex.getMessage(),
+                                false);
+                    }
                     Debug.log("[EternalGrowth] chunk setBlock path failed source=" + source
                             + " method=" + method.toGenericString()
                             + " error=" + ex.getMessage());
@@ -585,8 +623,14 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         String methodTried = "world.setBlock(x,y,z,blockId)";
         try {
             world.setBlock(pos.getX(), pos.getY(), pos.getZ(), blockId);
-            return new SetBlockResult(true, methodTried, "ok");
-        } catch (Exception ex) {
+            return new SetBlockResult(true, methodTried, "ok", false);
+        } catch (Throwable ex) {
+            if (isUnknownKeyError(ex.getMessage())) {
+                return new SetBlockResult(false,
+                        methodTried,
+                        ex.getClass().getSimpleName() + ": " + ex.getMessage(),
+                        false);
+            }
             Debug.log("[EternalGrowth] setBlock primary path failed source=" + source
                     + " method=" + methodTried
                     + " targetBlockId=" + blockId
@@ -596,8 +640,14 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         methodTried = "world.setBlock(x,y,z,blockId,rotation)";
         try {
             world.setBlock(pos.getX(), pos.getY(), pos.getZ(), blockId, 0);
-            return new SetBlockResult(true, methodTried, "ok");
-        } catch (Exception ex) {
+            return new SetBlockResult(true, methodTried, "ok", false);
+        } catch (Throwable ex) {
+            if (isUnknownKeyError(ex.getMessage())) {
+                return new SetBlockResult(false,
+                        methodTried,
+                        ex.getClass().getSimpleName() + ": " + ex.getMessage(),
+                        false);
+            }
             Debug.warn("[EternalGrowth] failed setBlock source=" + source
                     + " worldClass=" + world.getClass().getName()
                     + " targetBlockId=" + blockId
@@ -605,8 +655,12 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                     + " error=" + ex.getMessage());
             Debug.log("[EternalGrowth] setBlock candidates worldClass=" + world.getClass().getName()
                     + " methods=" + listBlockMutationCandidates(world));
-            return new SetBlockResult(false, methodTried, ex.getMessage());
+            return new SetBlockResult(false, methodTried, ex.getClass().getSimpleName() + ": " + ex.getMessage(), true);
         }
+    }
+
+    private boolean isUnknownKeyError(String message) {
+        return message != null && message.contains("Unknown key!");
     }
 
     private ResolvedEternalPos resolveEternalGrowthPosition(World world, Vector3i targetPos) {
@@ -1070,7 +1124,7 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
     public record RecentSickleInteractionContext(long timestampMs, String heldItemId, int x, int y, int z, String interactionType) {
     }
 
-    private record SetBlockResult(boolean success, String path, String reason) {
+    private record SetBlockResult(boolean success, String path, String reason, boolean retriable) {
     }
 
     private record ChunkProbe(boolean loaded, Object chunk, int chunkX, int chunkZ, String path) {
