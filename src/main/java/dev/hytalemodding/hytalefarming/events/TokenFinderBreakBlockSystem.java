@@ -15,6 +15,7 @@ import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.event.events.ecs.BreakBlockEvent;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.transaction.ItemStackTransaction;
+import com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
@@ -396,7 +397,7 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                     + " chunkRetrievalPath=" + chunkProbe.path()
                     + " setBlockPathHint=chunk.setBlock->world.setBlock");
 
-            if (!isEternalStage1Crop(currentBlockId)) {
+            if (!"fallback_target".equals(resolved.path()) && !isEternalStage1Crop(currentBlockId)) {
                 if (attempt < ETERNAL_GROWTH_MAX_ATTEMPTS) {
                     scheduleEternalGrowthAttempt(ref,
                             store,
@@ -422,6 +423,30 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                 return;
             }
 
+            if ("fallback_target".equals(resolved.path())) {
+                if (attempt < ETERNAL_GROWTH_MAX_ATTEMPTS) {
+                    scheduleEternalGrowthAttempt(ref,
+                            store,
+                            world,
+                            blockPos,
+                            harvestedBlockId,
+                            source,
+                            batch,
+                            cfg,
+                            level,
+                            maxLevel,
+                            tierCount,
+                            attempt + 1,
+                            observedBlockIds);
+                } else {
+                    Debug.log("[EternalGrowth] source=" + source + " procResult=false reason=position_resolution_failed"
+                            + " targetPos=" + blockPos.getX() + "," + blockPos.getY() + "," + blockPos.getZ()
+                            + " harvestedBlockId=" + harvestedBlockId
+                            + " observedSequence=" + observedBlockIds);
+                }
+                return;
+            }
+
             String stagePrefix = currentBlockId.substring(0, currentBlockId.length() - "_Stage1".length());
             int currentStage = 1;
             boolean advancedAny = false;
@@ -430,9 +455,21 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
             String chosenSetBlockPath = "<none>";
             String failureReason = "none";
 
-            for (int rollIndex = 1; rollIndex <= tierCount; rollIndex++) {
+            int maxReachableStage = 1;
+            while (isStageIdRegistered(stagePrefix + "_Stage" + (maxReachableStage + 1))) {
+                maxReachableStage++;
+            }
+            int cappedTierCount = Math.max(0, Math.min(tierCount, maxReachableStage - 1));
+            if (cappedTierCount <= 0) {
+                Debug.log("[EternalGrowth] source=" + source + " procResult=false reason=target_stage_id_missing"
+                        + " stagePrefix=" + stagePrefix
+                        + " targetPos=" + resolvedPos.getX() + "," + resolvedPos.getY() + "," + resolvedPos.getZ());
+                return;
+            }
+
+            for (int rollIndex = 1; rollIndex <= cappedTierCount; rollIndex++) {
                 boolean tierRoll = rollProc("eternal_growth", level, maxLevel, cfg.getEnchantProc(), source);
-                Debug.log("[EternalGrowth] source=" + source + " tierRoll=" + rollIndex + "/" + tierCount
+                Debug.log("[EternalGrowth] source=" + source + " tierRoll=" + rollIndex + "/" + cappedTierCount
                         + " chance=" + cfg.getEnchantProc() + " rollSuccess=" + tierRoll);
                 if (!tierRoll) {
                     failureReason = "tier_roll_failed_at_" + rollIndex;
@@ -475,7 +512,7 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                     + " chosenSetBlockPath=" + chosenSetBlockPath
                     + " procResult=" + advancedAny
                     + " failureReason=" + failureReason
-                    + " tierCount=" + tierCount
+                    + " tierCount=" + cappedTierCount
                     + " finalStage=" + currentStage);
 
             if (!advancedAny) {
@@ -587,22 +624,25 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
     }
 
     private ResolvedEternalPos resolveEternalGrowthPosition(World world, Vector3i targetPos) {
-        String atTarget = getBlockIdAt(world, targetPos);
-        Vector3i minusOne = new Vector3i(targetPos.getX(), targetPos.getY() - 1, targetPos.getZ());
-        String atMinusOne = getBlockIdAt(world, minusOne);
-        Vector3i plusOne = new Vector3i(targetPos.getX(), targetPos.getY() + 1, targetPos.getZ());
-        String atPlusOne = getBlockIdAt(world, plusOne);
+        CandidateBlock target = candidate(world, targetPos, "target");
+        CandidateBlock minusOne = candidate(world, new Vector3i(targetPos.getX(), targetPos.getY() - 1, targetPos.getZ()), "target_minus_1");
+        CandidateBlock plusOne = candidate(world, new Vector3i(targetPos.getX(), targetPos.getY() + 1, targetPos.getZ()), "target_plus_1");
+        CandidateBlock minusTwo = candidate(world, new Vector3i(targetPos.getX(), targetPos.getY() - 2, targetPos.getZ()), "target_minus_2");
 
-        if (isAnyEternalCropStage(atTarget)) {
-            return new ResolvedEternalPos(targetPos, "target", atTarget, atMinusOne, atPlusOne);
+        for (CandidateBlock candidate : List.of(target, minusOne, plusOne, minusTwo)) {
+            Debug.log("[EternalGrowth] resolveCandidate targetPos=" + targetPos.getX() + "," + targetPos.getY() + "," + targetPos.getZ()
+                    + " candidatePos=" + candidate.pos().getX() + "," + candidate.pos().getY() + "," + candidate.pos().getZ()
+                    + " candidateBlockId=" + candidate.blockId());
+            if (isEternalStage1Crop(candidate.blockId())) {
+                return new ResolvedEternalPos(candidate.pos(), candidate.path(), target.blockId(), minusOne.blockId(), plusOne.blockId());
+            }
         }
-        if (isAnyEternalCropStage(atMinusOne)) {
-            return new ResolvedEternalPos(minusOne, "target_minus_1", atTarget, atMinusOne, atPlusOne);
-        }
-        if (isAnyEternalCropStage(atPlusOne)) {
-            return new ResolvedEternalPos(plusOne, "target_plus_1", atTarget, atMinusOne, atPlusOne);
-        }
-        return new ResolvedEternalPos(targetPos, "fallback_target", atTarget, atMinusOne, atPlusOne);
+
+        return new ResolvedEternalPos(targetPos, "fallback_target", target.blockId(), minusOne.blockId(), plusOne.blockId());
+    }
+
+    private CandidateBlock candidate(World world, Vector3i pos, String path) {
+        return new CandidateBlock(pos, getBlockIdAt(world, pos), path);
     }
 
     private boolean isAnyEternalCropStage(String blockId) {
@@ -650,6 +690,11 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         }
 
         return new ChunkProbe(false, null, chunkX, chunkZ, "none");
+    }
+
+    private boolean isStageIdRegistered(String stageBlockId) {
+        int blockId = BlockType.getBlockIdOrUnknown(stageBlockId, "[EternalGrowth] missing block type id");
+        return blockId != BlockType.UNKNOWN_ID;
     }
 
     public void sendBatchSummaryIfAny(Player player, PlayerRef playerRef, ProcBatch batch, String source) {
@@ -1055,6 +1100,9 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                                       String blockAtTarget,
                                       String blockAtTargetMinus1,
                                       String blockAtTargetPlus1) {
+    }
+
+    private record CandidateBlock(Vector3i pos, String blockId, String path) {
     }
 
     public static final class ProcBatch {
