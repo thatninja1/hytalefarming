@@ -1,0 +1,213 @@
+Group #Root {
+  LayoutMode: Center;
+  Anchor: (Full: 1);
+  Background: #10151c(0.96);
+
+  Group #RootPanel {
+    Anchor: (Width: 1320, Height: 560);
+    LayoutMode: Top;
+    Background: #0d1624(0.96);
+
+    Label #TitleLabel {
+      Anchor: (Top: 20, Width: 1280, Height: 52);
+      Text: "Ninja Farming";
+      Style: (FontSize: 42, Alignment: Center, TextColor: #E5E7EB);
+    }
+
+    Label #SubtitleLabel {
+      Anchor: (Top: 4, Width: 1280, Height: 30);
+      Text: "Upgrade your Farming Tool";
+      Style: (FontSize: 20, Alignment: Center, TextColor: #CBD5E1);
+    }
+
+    Label #TokenBalanceLabel {
+      Anchor: (Top: 8, Width: 1280, Height: 30);
+      Text: "Tokens: 0";
+      Style: (FontSize: 22, Alignment: Center, TextColor: #93C5FD);
+    }
+
+    Group #UpgradeRow {
+      Anchor: (Top: 24, Left: 20, Width: 1280, Height: 280);
+      LayoutMode: Left;
+
+      Group #TokenFinderTile {
+        Anchor: (Width: 240, Height: 250);
+        LayoutMode: Top;
+        Background: #1a2b40(0.92);
+
+        Label #TokenFinderTitle {
+          Anchor: (Top: 10, Width: 220, Height: 28);
+          Text: "Token Finder";
+          Style: (FontSize: 20, Alignment: Center, TextColor: #E2E8F0);
+        }
+
+        Label #TokenFinderLevelLabel {
+          Anchor: (Top: 6, Width: 220, Height: 24);
+          Text: "Level: 0 / 10";
+          Style: (FontSize: 16, Alignment: Center, TextColor: #BFDBFE);
+        }
+
+        Label #TokenFinderCostLabel {
+          Anchor: (Top: 4, Width: 220, Height: 24);
+          Text: "Cost: 10 Tokens";
+          Style: (FontSize: 16, Alignment: Center, TextColor: #BFDBFE);
+        }
+
+        Button #TokenFinderUpgradeButton {
+          Anchor: (Top: 12, Width: 190, Height: 42);
+
+          Label #TokenFinderUpgradeButtonLabel {
+            Anchor: (Width: 170, Height: 28);
+            Text: "Upgrade";
+            Style: (FontSize: 16, Alignment: Center, TextColor: #E2E8F0);
+          }
+        }
+      }
+
+      Group #FortuneTile {
+        Anchor: (Left: 20, Width: 240, Height: 250);
+        LayoutMode: Top;
+        Background: #1a2b40(0.92);
+
+        Label #FortuneTitle {
+          Anchor: (Top: 10, Width: 220, Height: 28);
+          Text: "Fortune";
+          Style: (FontSize: 20, Alignment: Center, TextColor: #E2E8F0);
+        }
+
+        Label #FortuneLevelLabel {
+          Anchor: (Top: 6, Width: 220, Height: 24);
+          Text: "Level: 0 / 5";
+          Style: (FontSize: 16, Alignment: Center, TextColor: #BFDBFE);
+        }
+
+        Label #FortuneCostLabel {
+          Anchor: (Top: 4, Width: 220, Height: 24);
+          Text: "Cost: 20 Tokens";
+          Style: (FontSize: 16, Alignment: Center, TextColor: #BFDBFE);
+        }
+
+        Button #FortuneUpgradeButton {
+          Anchor: (Top: 12, Width: 190, Height: 42);
+
+          Label #FortuneUpgradeButtonLabel {
+            Anchor: (Width: 170, Height: 28);
+            Text: "Upgrade";
+            Style: (FontSize: 16, Alignment: Center, TextColor: #E2E8F0);
+          }
+        }
+      }
+
+      Group #KeyfinderTile {
+        Anchor: (Left: 20, Width: 240, Height: 250);
+        LayoutMode: Top;
+        Background: #1a2b40(0.92);
+
+        Label #KeyfinderTitle {
+          Anchor: (Top: 10, Width: 220, Height: 28);
+          Text: "Keyfinder";
+          Style: (FontSize: 20, Alignment: Center, TextColor: #E2E8F0);
+        }
+
+        Label #KeyfinderLevelLabel {
+          Anchor: (Top: 6, Width: 220, Height: 24);
+          Text: "Level: 0 / 100";
+          Style: (FontSize: 16, Alignment: Center, TextColor: #BFDBFE);
+        }
+
+        Label #KeyfinderCostLabel {
+          Anchor: (Top: 4, Width: 220, Height: 24);
+          Text: "Cost: 50 Tokens";
+          Style: (FontSize: 16, Alignment: Center, TextColor: #BFDBFE);
+        }
+
+        Button #KeyfinderUpgradeButton {
+          Anchor: (Top: 12, Width: 190, Height: 42);
+
+          Label #KeyfinderUpgradeButtonLabel {
+            Anchor: (Width: 170, Height: 28);
+            Text: "Upgrade";
+            Style: (FontSize: 16, Alignment: Center, TextColor: #E2E8F0);
+          }
+        }
+      }
+
+      Group #EternalGrowthTile {
+        Anchor: (Left: 20, Width: 240, Height: 250);
+        LayoutMode: Top;
+        Background: #1a2b40(0.92);
+
+        Label #EternalGrowthTitle {
+          Anchor: (Top: 10, Width: 220, Height: 28);
+          Text: "Eternal Growth";
+          Style: (FontSize: 20, Alignment: Center, TextColor: #E2E8F0);
+        }
+
+        Label #EternalGrowthLevelLabel {
+          Anchor: (Top: 6, Width: 220, Height: 24);
+          Text: "Level: 0 / 5";
+          Style: (FontSize: 16, Alignment: Center, TextColor: #BFDBFE);
+        }
+
+        Label #EternalGrowthCostLabel {
+          Anchor: (Top: 4, Width: 220, Height: 24);
+          Text: "Cost: 30 Tokens";
+          Style: (FontSize: 16, Alignment: Center, TextColor: #BFDBFE);
+        }
+
+        Button #EternalGrowthUpgradeButton {
+          Anchor: (Top: 12, Width: 190, Height: 42);
+
+          Label #EternalGrowthUpgradeButtonLabel {
+            Anchor: (Width: 170, Height: 28);
+            Text: "Upgrade";
+            Style: (FontSize: 16, Alignment: Center, TextColor: #E2E8F0);
+          }
+        }
+      }
+
+      Group #Tile5 {
+        Anchor: (Left: 20, Width: 240, Height: 250);
+        LayoutMode: Top;
+        Background: #172334(0.80);
+
+        Label #Tile5Title {
+          Anchor: (Top: 10, Width: 220, Height: 28);
+          Text: "Coming Soon";
+          Style: (FontSize: 20, Alignment: Center, TextColor: #94A3B8);
+        }
+
+        Label #Tile5Level {
+          Anchor: (Top: 6, Width: 220, Height: 24);
+          Text: "Level: --";
+          Style: (FontSize: 16, Alignment: Center, TextColor: #64748B);
+        }
+
+        Label #Tile5Cost {
+          Anchor: (Top: 4, Width: 220, Height: 24);
+          Text: "Cost: N/A";
+          Style: (FontSize: 16, Alignment: Center, TextColor: #64748B);
+        }
+
+        Button #Tile5Button {
+          Anchor: (Top: 12, Width: 190, Height: 42);
+          Label {
+            Anchor: (Width: 170, Height: 28);
+            Text: "Upgrade";
+            Style: (FontSize: 16, Alignment: Center, TextColor: #CBD5E1);
+          }
+        }
+      }
+    }
+
+    Button #CloseButton {
+      Anchor: (Top: 24, Left: 20, Width: 180, Height: 40);
+
+      Label #CloseButtonLabel {
+        Anchor: (Width: 160, Height: 28);
+        Text: "Close";
+        Style: (FontSize: 16, Alignment: Center, TextColor: #E2E8F0);
+      }
+    }
+  }
+}

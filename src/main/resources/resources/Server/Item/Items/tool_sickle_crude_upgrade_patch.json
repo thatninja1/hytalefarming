@@ -1,0 +1,12 @@
+{
+  "Id": "Tool_Sickle_Crude",
+  "Interactions": {
+    "Secondary": {
+      "Interactions": [
+        {
+          "Type": "farming_tool_upgrade_menu"
+        }
+      ]
+    }
+  }
+}

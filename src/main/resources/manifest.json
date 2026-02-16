@@ -1,0 +1,20 @@
+{
+  "Group": "HytaleFarming",
+  "Name": "ThoriumUpgradeableHoe",
+  "Version": "1.0.1",
+  "Description": "Upgradeable farming sickles with token currency and enchants",
+  "Authors": [
+    {
+      "Name": "Codex",
+      "Email": "noreply@example.com",
+      "Url": "https://hytalemodding.dev"
+    }
+  ],
+  "Website": "https://hytalemodding.dev",
+  "DisabledByDefault": false,
+  "IncludesAssetPack": true,
+  "Dependencies": {},
+  "OptionalDependencies": {},
+  "ServerVersion": "*",
+  "Main": "dev.hytalemodding.hytalefarming.HytaleFarmingPlugin"
+}
