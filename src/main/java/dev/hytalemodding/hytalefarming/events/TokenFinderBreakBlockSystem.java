@@ -372,26 +372,31 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                                               List<String> observedBlockIds) {
         long delayMs = ETERNAL_GROWTH_ATTEMPT_DELAY_MS * attempt;
         ETERNAL_GROWTH_VERIFIER.schedule(() -> world.execute(() -> {
-            Vector3i resolvedPos = resolveEternalGrowthPosition(world, blockPos, harvestedBlockId);
-            String blockAtTarget = getBlockIdAt(world, blockPos);
-            String blockAtTargetMinus1 = getBlockIdAt(world, new Vector3i(blockPos.getX(), blockPos.getY() - 1, blockPos.getZ()));
+            ResolvedEternalPos resolved = resolveEternalGrowthPosition(world, blockPos);
+            Vector3i resolvedPos = resolved.pos();
+            String blockAtTarget = resolved.blockAtTarget();
+            String blockAtTargetMinus1 = resolved.blockAtTargetMinus1();
             String currentBlockId = getBlockIdAt(world, resolvedPos);
-            boolean chunkLoaded = isChunkLoaded(world, resolvedPos);
+            ChunkProbe chunkProbe = probeChunk(world, resolvedPos);
             observedBlockIds.add(currentBlockId);
 
             Debug.log("[EternalGrowth] source=" + source
                     + " world=" + world.getName()
                     + " targetPos=" + blockPos.getX() + "," + blockPos.getY() + "," + blockPos.getZ()
                     + " resolvedPos=" + resolvedPos.getX() + "," + resolvedPos.getY() + "," + resolvedPos.getZ()
+                    + " resolutionPath=" + resolved.path()
                     + " attempt=" + attempt + "/" + ETERNAL_GROWTH_MAX_ATTEMPTS
                     + " delayMs=" + delayMs
                     + " blockIdAtTarget=" + blockAtTarget
                     + " blockIdAtTargetMinus1=" + blockAtTargetMinus1
                     + " blockAfterHarvest=" + currentBlockId
-                    + " chunkLoaded=" + chunkLoaded
-                    + " setBlockPath=" + (chunkLoaded ? "World#setBlock|string->World#setBlock|string,int" : "deferred_wait_chunk"));
+                    + " chunkX=" + chunkProbe.chunkX()
+                    + " chunkZ=" + chunkProbe.chunkZ()
+                    + " chunkLoaded=" + chunkProbe.loaded()
+                    + " chunkRetrievalPath=" + chunkProbe.path()
+                    + " setBlockPathHint=chunk.setBlock->world.setBlock");
 
-            if (!chunkLoaded || !isEternalStage1Crop(currentBlockId)) {
+            if (!isEternalStage1Crop(currentBlockId)) {
                 if (attempt < ETERNAL_GROWTH_MAX_ATTEMPTS) {
                     scheduleEternalGrowthAttempt(ref,
                             store,
@@ -410,7 +415,7 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                     Debug.log("[EternalGrowth] source=" + source + " procResult=false reason=post_harvest_not_stage1_after_retries"
                             + " harvestedBlockId=" + harvestedBlockId
                             + " finalObservedBlockId=" + currentBlockId
-                            + " chunkLoaded=" + chunkLoaded
+                            + " chunkLoaded=" + chunkProbe.loaded()
                             + " observedSequence=" + observedBlockIds
                             + " attempts=" + ETERNAL_GROWTH_MAX_ATTEMPTS);
                 }
@@ -437,10 +442,10 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                 int targetStage = currentStage + 1;
                 String targetBlockId = stagePrefix + "_Stage" + targetStage;
                 chosenStageTarget = targetBlockId;
-                SetBlockResult setBlockResult = trySetBlockById(world, resolvedPos, targetBlockId, source);
+                SetBlockResult setBlockResult = trySetBlockById(world, chunkProbe, resolvedPos, targetBlockId, source);
                 chosenSetBlockPath = setBlockResult.path();
                 if (!setBlockResult.success()) {
-                    failureReason = "set_block_failed:" + setBlockResult.reason();
+                    failureReason = "mutation_failed:" + setBlockResult.reason();
                     break;
                 }
 
@@ -474,6 +479,21 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                     + " finalStage=" + currentStage);
 
             if (!advancedAny) {
+                if (failureReason.startsWith("mutation_failed") && attempt < ETERNAL_GROWTH_MAX_ATTEMPTS) {
+                    scheduleEternalGrowthAttempt(ref,
+                            store,
+                            world,
+                            blockPos,
+                            harvestedBlockId,
+                            source,
+                            batch,
+                            cfg,
+                            level,
+                            maxLevel,
+                            tierCount,
+                            attempt + 1,
+                            observedBlockIds);
+                }
                 return;
             }
 
@@ -511,7 +531,34 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                 && normalized.endsWith("_Stage1");
     }
 
-    private SetBlockResult trySetBlockById(World world, Vector3i pos, String blockId, String source) {
+    private SetBlockResult trySetBlockById(World world, ChunkProbe chunkProbe, Vector3i pos, String blockId, String source) {
+        if (chunkProbe.chunk() != null) {
+            int localX = pos.getX() & 15;
+            int localZ = pos.getZ() & 15;
+            for (Method method : chunkProbe.chunk().getClass().getMethods()) {
+                if (!"setBlock".equals(method.getName())) {
+                    continue;
+                }
+                Class<?>[] params = method.getParameterTypes();
+                try {
+                    if (params.length == 5 && params[0] == int.class && params[1] == int.class
+                            && params[2] == int.class && params[3] == String.class && params[4] == int.class) {
+                        method.invoke(chunkProbe.chunk(), localX, pos.getY(), localZ, blockId, 0);
+                        return new SetBlockResult(true, "chunk.setBlock(localX,y,localZ,blockId,rotation)", "ok");
+                    }
+                    if (params.length == 4 && params[0] == int.class && params[1] == int.class
+                            && params[2] == int.class && params[3] == String.class) {
+                        method.invoke(chunkProbe.chunk(), localX, pos.getY(), localZ, blockId);
+                        return new SetBlockResult(true, "chunk.setBlock(localX,y,localZ,blockId)", "ok");
+                    }
+                } catch (Exception ex) {
+                    Debug.log("[EternalGrowth] chunk setBlock path failed source=" + source
+                            + " method=" + method.toGenericString()
+                            + " error=" + ex.getMessage());
+                }
+            }
+        }
+
         String methodTried = "world.setBlock(x,y,z,blockId)";
         try {
             world.setBlock(pos.getX(), pos.getY(), pos.getZ(), blockId);
@@ -539,28 +586,30 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         }
     }
 
-    private Vector3i resolveEternalGrowthPosition(World world, Vector3i targetPos, String harvestedBlockId) {
+    private ResolvedEternalPos resolveEternalGrowthPosition(World world, Vector3i targetPos) {
         String atTarget = getBlockIdAt(world, targetPos);
         Vector3i minusOne = new Vector3i(targetPos.getX(), targetPos.getY() - 1, targetPos.getZ());
         String atMinusOne = getBlockIdAt(world, minusOne);
+        Vector3i plusOne = new Vector3i(targetPos.getX(), targetPos.getY() + 1, targetPos.getZ());
+        String atPlusOne = getBlockIdAt(world, plusOne);
 
-        String expectedStage1 = toStageOneBlockId(harvestedBlockId);
-        boolean targetLooksEmpty = atTarget == null || "Empty".equals(atTarget) || "<unknown>".equals(atTarget);
-        boolean minusOneLooksCrop = isEternalStageFinalCrop(atMinusOne)
-                || isEternalStage1Crop(atMinusOne)
-                || (expectedStage1 != null && expectedStage1.equals(atMinusOne));
-        if (targetLooksEmpty && minusOneLooksCrop) {
-            return minusOne;
+        if (isAnyEternalCropStage(atTarget)) {
+            return new ResolvedEternalPos(targetPos, "target", atTarget, atMinusOne, atPlusOne);
         }
-        return targetPos;
+        if (isAnyEternalCropStage(atMinusOne)) {
+            return new ResolvedEternalPos(minusOne, "target_minus_1", atTarget, atMinusOne, atPlusOne);
+        }
+        if (isAnyEternalCropStage(atPlusOne)) {
+            return new ResolvedEternalPos(plusOne, "target_plus_1", atTarget, atMinusOne, atPlusOne);
+        }
+        return new ResolvedEternalPos(targetPos, "fallback_target", atTarget, atMinusOne, atPlusOne);
     }
 
-    private String toStageOneBlockId(String harvestedBlockId) {
-        String normalized = normalizeBlockId(harvestedBlockId);
-        if (normalized == null || !normalized.endsWith("_StageFinal")) {
-            return null;
-        }
-        return normalized.substring(0, normalized.length() - "_StageFinal".length()) + "_Stage1";
+    private boolean isAnyEternalCropStage(String blockId) {
+        String normalized = normalizeBlockId(blockId);
+        return normalized != null
+                && normalized.contains("_Block_Eternal_State_Definitions_")
+                && normalized.contains("_Stage");
     }
 
     private String getBlockIdAt(World world, Vector3i pos) {
@@ -570,11 +619,37 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         return normalizeBlockId(world.getBlockType(pos.getX(), pos.getY(), pos.getZ()).getId());
     }
 
-    private boolean isChunkLoaded(World world, Vector3i pos) {
+    private ChunkProbe probeChunk(World world, Vector3i pos) {
         int chunkX = pos.getX() >> 4;
         int chunkZ = pos.getZ() >> 4;
-        long index = ((long) chunkX << 32) | (chunkZ & 0xffffffffL);
-        return world.getChunkIfLoaded(index) != null;
+        long index = ((chunkX & 0xffffffffL) << 32) | (chunkZ & 0xffffffffL);
+
+        Object chunk = world.getChunkIfLoaded(index);
+        if (chunk != null) {
+            return new ChunkProbe(true, chunk, chunkX, chunkZ, "world.getChunkIfLoaded(long)");
+        }
+
+        for (String methodName : List.of("getChunkIfLoaded", "getChunkAt")) {
+            for (Method method : world.getClass().getMethods()) {
+                if (!method.getName().equals(methodName)) {
+                    continue;
+                }
+                Class<?>[] params = method.getParameterTypes();
+                if (params.length == 2 && params[0] == int.class && params[1] == int.class) {
+                    try {
+                        Object reflectedChunk = method.invoke(world, chunkX, chunkZ);
+                        if (reflectedChunk != null) {
+                            return new ChunkProbe(true, reflectedChunk, chunkX, chunkZ,
+                                    "world." + methodName + "(int,int)");
+                        }
+                    } catch (Exception ignored) {
+                        // fallback to next option
+                    }
+                }
+            }
+        }
+
+        return new ChunkProbe(false, null, chunkX, chunkZ, "none");
     }
 
     public void sendBatchSummaryIfAny(Player player, PlayerRef playerRef, ProcBatch batch, String source) {
@@ -970,6 +1045,16 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
     }
 
     private record SetBlockResult(boolean success, String path, String reason) {
+    }
+
+    private record ChunkProbe(boolean loaded, Object chunk, int chunkX, int chunkZ, String path) {
+    }
+
+    private record ResolvedEternalPos(Vector3i pos,
+                                      String path,
+                                      String blockAtTarget,
+                                      String blockAtTargetMinus1,
+                                      String blockAtTargetPlus1) {
     }
 
     public static final class ProcBatch {
