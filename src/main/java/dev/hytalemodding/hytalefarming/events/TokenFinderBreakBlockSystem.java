@@ -15,7 +15,6 @@ import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.event.events.ecs.BreakBlockEvent;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.transaction.ItemStackTransaction;
-import com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
@@ -317,9 +316,6 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
     private boolean processEternalGrowth(PlayerRef playerRef, Vector3i blockPos, String harvestedBlockId, int level, String source, ProcBatch batch) {
         EnchantsConfig.EternalGrowth cfg = plugin.getEnchantsConfig().getEternalGrowth();
         int maxLevel = cfg.getMaxLevel();
-        if (!rollProc("eternal_growth", level, maxLevel, cfg.getEnchantProc(), source)) {
-            return false;
-        }
 
         if (blockPos == null || !isEternalStageFinalCrop(harvestedBlockId)) {
             Debug.log("[EternalGrowth] source=" + source + " procResult=false reason=not_eternal_or_missing_block_pos blockId=" + harvestedBlockId);
@@ -339,7 +335,7 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
             return false;
         }
 
-        int tierCount = (int) Math.ceil(Math.max(1, level) / 10.0D);
+        int tierCount = 1 + ((Math.max(1, level) - 1) / 10);
 
         scheduleEternalGrowthAttempt(ref,
                 store,
@@ -455,50 +451,40 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
             String chosenSetBlockPath = "<none>";
             String failureReason = "none";
 
-            int maxReachableStage = 1;
-            while (isStageIdRegistered(stagePrefix + "_Stage" + (maxReachableStage + 1))) {
-                maxReachableStage++;
-            }
-            int cappedTierCount = Math.max(0, Math.min(tierCount, maxReachableStage - 1));
-            if (cappedTierCount <= 0) {
-                Debug.log("[EternalGrowth] source=" + source + " procResult=false reason=target_stage_id_missing"
-                        + " stagePrefix=" + stagePrefix
-                        + " targetPos=" + resolvedPos.getX() + "," + resolvedPos.getY() + "," + resolvedPos.getZ());
-                return;
-            }
-
-            for (int rollIndex = 1; rollIndex <= cappedTierCount; rollIndex++) {
+            for (int rollIndex = 1; rollIndex <= tierCount; rollIndex++) {
                 boolean tierRoll = rollProc("eternal_growth", level, maxLevel, cfg.getEnchantProc(), source);
-                Debug.log("[EternalGrowth] source=" + source + " tierRoll=" + rollIndex + "/" + cappedTierCount
+                Debug.log("[EternalGrowth] source=" + source + " tierRoll=" + rollIndex + "/" + tierCount
                         + " chance=" + cfg.getEnchantProc() + " rollSuccess=" + tierRoll);
                 if (!tierRoll) {
                     failureReason = "tier_roll_failed_at_" + rollIndex;
                     break;
                 }
+                currentStage++;
+            }
 
-                int targetStage = currentStage + 1;
-                String targetBlockId = stagePrefix + "_Stage" + targetStage;
-                chosenStageTarget = targetBlockId;
-                SetBlockResult setBlockResult = trySetBlockById(world, chunkProbe, resolvedPos, targetBlockId, source);
-                chosenSetBlockPath = setBlockResult.path();
-                if (!setBlockResult.success()) {
-                    failureReason = "mutation_failed:" + setBlockResult.reason();
+            if (currentStage <= 1) {
+                failureReason = "no_tier_roll_success";
+            } else {
+                for (int stageToTry = currentStage; stageToTry >= 2; stageToTry--) {
+                    String targetBlockId = stagePrefix + "_Stage" + stageToTry;
+                    chosenStageTarget = targetBlockId;
+                    SetBlockResult setBlockResult = trySetBlockById(world, chunkProbe, resolvedPos, targetBlockId, source);
+                    chosenSetBlockPath = setBlockResult.path();
+                    if (!setBlockResult.success()) {
+                        failureReason = "mutation_failed:" + setBlockResult.reason();
+                        continue;
+                    }
+
+                    afterBlockId = getBlockIdAt(world, resolvedPos);
+                    if (!targetBlockId.equals(afterBlockId)) {
+                        failureReason = "set_mismatch";
+                        continue;
+                    }
+
+                    currentStage = stageToTry;
+                    advancedAny = true;
                     break;
                 }
-
-                afterBlockId = getBlockIdAt(world, resolvedPos);
-                if (!targetBlockId.equals(afterBlockId)) {
-                    Debug.log("[EternalGrowth] source=" + source + " procResult=false reason=set_mismatch"
-                            + " blockPos=" + resolvedPos.getX() + "," + resolvedPos.getY() + "," + resolvedPos.getZ()
-                            + " attemptedTargetBlockId=" + targetBlockId
-                            + " observedAfterBlockId=" + afterBlockId);
-                    failureReason = "set_mismatch";
-                    break;
-                }
-
-                currentStage = targetStage;
-                advancedAny = true;
-                chosenSetBlockPath = setBlockResult.path();
             }
 
             Debug.log("[EternalGrowth] source=" + source
@@ -512,7 +498,7 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                     + " chosenSetBlockPath=" + chosenSetBlockPath
                     + " procResult=" + advancedAny
                     + " failureReason=" + failureReason
-                    + " tierCount=" + cappedTierCount
+                    + " tierCount=" + tierCount
                     + " finalStage=" + currentStage);
 
             if (!advancedAny) {
@@ -690,11 +676,6 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         }
 
         return new ChunkProbe(false, null, chunkX, chunkZ, "none");
-    }
-
-    private boolean isStageIdRegistered(String stageBlockId) {
-        int blockId = BlockType.getBlockIdOrUnknown(stageBlockId, "[EternalGrowth] missing block type id");
-        return blockId != BlockType.UNKNOWN_ID;
     }
 
     public void sendBatchSummaryIfAny(Player player, PlayerRef playerRef, ProcBatch batch, String source) {
