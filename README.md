@@ -51,6 +51,7 @@ Each enchant supports:
 - `baseUpgradeCost`
 - `enchantProc`
 - `procMessage`
+- `upgradeCostIncrease` (for enchants that use linear increasing costs)
 
 `tokenFinder` also supports:
 - `defaultLevel`
@@ -62,6 +63,7 @@ Each enchant supports:
 - `{level}` enchant level
 - `{crateId}` chosen keyfinder crate id
 - `{extra}` fortune extra crop amount
+- `{count}` Eternal Growth advanced-crop count
 
 #### Hex color support
 - `#RRGGBB` tokens are accepted in templates.
@@ -87,3 +89,10 @@ Each enchant supports:
 
 ## Keyfinder
 - Key commands support `{player}` and `<crateid>` replacement in configured command strings.
+
+## Eternal Growth
+- Enchant key: `eternal_growth` (display: `Eternal Growth`).
+- Applies only to eternal crops (`_Block_Eternal_State_Definitions_...`).
+- On a successful proc, harvested eternal crops that reset to `_Stage1` are immediately advanced to `_Stage2`.
+- Works for `Use` harvest and Primary/Secondary AOE harvest processing.
+- In AOE batch mode, Eternal Growth messages are aggregated into the single swing summary using `{count}`.

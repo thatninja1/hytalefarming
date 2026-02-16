@@ -31,6 +31,7 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
     private static final String ACTION_UPGRADE_TOKEN_FINDER = "upgrade_token_finder";
     private static final String ACTION_UPGRADE_FORTUNE = "upgrade_fortune";
     private static final String ACTION_UPGRADE_KEYFINDER = "upgrade_keyfinder";
+    private static final String ACTION_UPGRADE_ETERNAL_GROWTH = "upgrade_eternal_growth";
 
     public ThoriumHoeUpgradePage(PlayerRef playerRef) {
         super(playerRef, CustomPageLifetime.CanDismiss);
@@ -102,7 +103,8 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
         boolean tokenFinderClicked = eventData.contains(ACTION_UPGRADE_TOKEN_FINDER);
         boolean fortuneClicked = eventData.contains(ACTION_UPGRADE_FORTUNE);
         boolean keyfinderClicked = eventData.contains(ACTION_UPGRADE_KEYFINDER);
-        if (!tokenFinderClicked && !fortuneClicked && !keyfinderClicked) {
+        boolean eternalGrowthClicked = eventData.contains(ACTION_UPGRADE_ETERNAL_GROWTH);
+        if (!tokenFinderClicked && !fortuneClicked && !keyfinderClicked && !eternalGrowthClicked) {
             return;
         }
 
@@ -128,11 +130,16 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
             enchantName = "Fortune";
             maxLevel = HytaleFarmingPlugin.instance().getEnchantsConfig().getFortune().getMaxLevel();
             cost = HytaleFarmingPlugin.instance().getEnchantsConfig().getFortune().getUpgradeCost(tokenService.enchantLevel(playerRef.getUuid(), playerRef.getUsername(), enchantKey));
-        } else {
+        } else if (keyfinderClicked) {
             enchantKey = "keyfinder";
             enchantName = "Keyfinder";
             maxLevel = HytaleFarmingPlugin.instance().getEnchantsConfig().getKeyfinder().getMaxLevel();
             cost = HytaleFarmingPlugin.instance().getEnchantsConfig().getKeyfinder().getUpgradeCost(tokenService.enchantLevel(playerRef.getUuid(), playerRef.getUsername(), enchantKey));
+        } else {
+            enchantKey = "eternal_growth";
+            enchantName = "Eternal Growth";
+            maxLevel = HytaleFarmingPlugin.instance().getEnchantsConfig().getEternalGrowth().getMaxLevel();
+            cost = HytaleFarmingPlugin.instance().getEnchantsConfig().getEternalGrowth().getUpgradeCost(tokenService.enchantLevel(playerRef.getUuid(), playerRef.getUsername(), enchantKey));
         }
         int currentLevel = tokenService.enchantLevel(playerRef.getUuid(), playerRef.getUsername(), enchantKey);
         long balanceBefore = tokenService.balance(playerRef.getUuid(), playerRef.getUsername());
@@ -156,8 +163,10 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
             upgraded = tokenService.tryUpgradeTokenFinder(playerRef.getUuid(), playerRef.getUsername());
         } else if (fortuneClicked) {
             upgraded = tokenService.tryUpgradeFortune(playerRef.getUuid(), playerRef.getUsername());
-        } else {
+        } else if (keyfinderClicked) {
             upgraded = tokenService.tryUpgradeKeyfinder(playerRef.getUuid(), playerRef.getUsername());
+        } else {
+            upgraded = tokenService.tryUpgradeEternalGrowth(playerRef.getUuid(), playerRef.getUsername());
         }
         if (!upgraded) {
             Debug.log("[FarmingDebug] upgrade failed: reason=serviceReturnedFalse enchant=" + enchantKey);
@@ -185,6 +194,7 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
         EnchantsConfig.TokenFinder tokenFinderCfg = HytaleFarmingPlugin.instance().getEnchantsConfig().getTokenFinder();
         EnchantsConfig.Fortune fortuneCfg = HytaleFarmingPlugin.instance().getEnchantsConfig().getFortune();
         EnchantsConfig.Keyfinder keyfinderCfg = HytaleFarmingPlugin.instance().getEnchantsConfig().getKeyfinder();
+        EnchantsConfig.EternalGrowth eternalGrowthCfg = HytaleFarmingPlugin.instance().getEnchantsConfig().getEternalGrowth();
 
         long balance = tokenService.balance(playerRef.getUuid(), playerRef.getUsername());
         int tokenFinderLevel = tokenService.enchantLevel(playerRef.getUuid(), playerRef.getUsername(), "token_finder");
@@ -199,6 +209,10 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
         int keyfinderMaxLevel = keyfinderCfg.getMaxLevel();
         int keyfinderCost = keyfinderCfg.getUpgradeCost(keyfinderLevel);
 
+        int eternalGrowthLevel = tokenService.enchantLevel(playerRef.getUuid(), playerRef.getUsername(), "eternal_growth");
+        int eternalGrowthMaxLevel = eternalGrowthCfg.getMaxLevel();
+        int eternalGrowthCost = eternalGrowthCfg.getUpgradeCost(eternalGrowthLevel);
+
         uiCommandBuilder.set("#TitleLabel.Text", HytaleFarmingPlugin.instance().getUiConfig().getUiTitle());
         uiCommandBuilder.set("#SubtitleLabel.Text", HytaleFarmingPlugin.instance().getUiConfig().getUiSubtitle());
         uiCommandBuilder.set("#TokenBalanceLabel.Text", "Tokens: " + balance);
@@ -211,6 +225,9 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
         uiCommandBuilder.set("#KeyfinderLevelLabel.Text", "Level: " + keyfinderLevel + " / " + keyfinderMaxLevel);
         uiCommandBuilder.set("#KeyfinderCostLabel.Text", keyfinderLevel >= keyfinderMaxLevel ? "Cost: N/A" : "Cost: " + keyfinderCost + " Tokens");
         uiCommandBuilder.set("#KeyfinderUpgradeButtonLabel.Text", keyfinderLevel >= keyfinderMaxLevel ? "MAX" : "Upgrade");
+        uiCommandBuilder.set("#EternalGrowthLevelLabel.Text", "Level: " + eternalGrowthLevel + " / " + eternalGrowthMaxLevel);
+        uiCommandBuilder.set("#EternalGrowthCostLabel.Text", eternalGrowthLevel >= eternalGrowthMaxLevel ? "Cost: N/A" : "Cost: " + eternalGrowthCost + " Tokens");
+        uiCommandBuilder.set("#EternalGrowthUpgradeButtonLabel.Text", eternalGrowthLevel >= eternalGrowthMaxLevel ? "MAX" : "Upgrade");
 
         uiEventBuilder.addEventBinding(CustomUIEventBindingType.Activating, "#CloseButton", EventData.of(ACTION_KEY, ACTION_CLOSE));
         Debug.log("[FarmingDebug] bound UI event Activating -> #CloseButton");
@@ -234,6 +251,13 @@ public class ThoriumHoeUpgradePage extends CustomUIPage {
             Debug.log("[FarmingDebug] bound UI event Activating -> #KeyfinderUpgradeButton");
         } else {
             Debug.log("[FarmingDebug] keyfinder at MAX; no upgrade binding added");
+        }
+
+        if (eternalGrowthLevel < eternalGrowthMaxLevel) {
+            uiEventBuilder.addEventBinding(CustomUIEventBindingType.Activating, "#EternalGrowthUpgradeButton", EventData.of(ACTION_KEY, ACTION_UPGRADE_ETERNAL_GROWTH));
+            Debug.log("[FarmingDebug] bound UI event Activating -> #EternalGrowthUpgradeButton");
+        } else {
+            Debug.log("[FarmingDebug] eternal growth at MAX; no upgrade binding added");
         }
     }
 

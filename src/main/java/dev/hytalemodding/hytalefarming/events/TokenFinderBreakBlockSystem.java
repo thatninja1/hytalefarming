@@ -16,6 +16,7 @@ import com.hypixel.hytale.server.core.event.events.ecs.BreakBlockEvent;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.transaction.ItemStackTransaction;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.hytalemodding.hytalefarming.Debug;
 import dev.hytalemodding.hytalefarming.HytaleFarmingPlugin;
@@ -173,13 +174,15 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         int tokenFinderLevel = plugin.getTokenService().enchantLevel(playerRef.getUuid(), playerRef.getUsername(), "token_finder");
         int fortuneLevel = plugin.getTokenService().enchantLevel(playerRef.getUuid(), playerRef.getUsername(), "fortune");
         int keyfinderLevel = plugin.getTokenService().enchantLevel(playerRef.getUuid(), playerRef.getUsername(), "keyfinder");
+        int eternalGrowthLevel = plugin.getTokenService().enchantLevel(playerRef.getUuid(), playerRef.getUsername(), "eternal_growth");
 
         Debug.log("[Drops] Could not intercept drop list; leaving vanilla drops for blockId=" + normalizedBlockId + " source=" + source);
 
         boolean tokenProc = processTokenFinder(player, playerRef, tokenFinderLevel, source, batch);
         boolean fortuneProc = processFortune(player, normalizedBlockId, fortuneLevel, source, batch);
         boolean keyfinderProc = processKeyfinder(player, playerRef, keyfinderLevel, source, batch);
-        logRadiusSummary(playerRef, source, validHarvestable, tokenProc || fortuneProc || keyfinderProc);
+        boolean eternalGrowthProc = processEternalGrowth(playerRef, blockPos, normalizedBlockId, eternalGrowthLevel, source, batch);
+        logRadiusSummary(playerRef, source, validHarvestable, tokenProc || fortuneProc || keyfinderProc || eternalGrowthProc);
     }
 
     private boolean processTokenFinder(Player player, PlayerRef playerRef, int level, String source, ProcBatch batch) {
@@ -202,7 +205,8 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                 "enchant", "Token Finder",
                 "level", String.valueOf(level),
                 "crateId", "",
-                "extra", ""
+                "extra", "",
+                "count", ""
         ));
         if (batch != null) {
             batch.totalTokensAwarded += awarded;
@@ -246,7 +250,8 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                     "enchant", "Fortune",
                     "level", String.valueOf(level),
                     "crateId", "",
-                    "extra", String.valueOf(extraAmount)
+                    "extra", String.valueOf(extraAmount),
+                    "count", ""
             ));
             if (batch != null) {
                 batch.totalFortuneExtra += extraAmount;
@@ -289,7 +294,8 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                 "enchant", "Keyfinder",
                 "level", String.valueOf(level),
                 "crateId", chosenCrate.getCrateId(),
-                "extra", ""
+                "extra", "",
+                "count", ""
         ));
         if (batch != null) {
             batch.keyfinderProcCount++;
@@ -300,11 +306,139 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         return true;
     }
 
+
+    private boolean processEternalGrowth(PlayerRef playerRef, Vector3i blockPos, String harvestedBlockId, int level, String source, ProcBatch batch) {
+        EnchantsConfig.EternalGrowth cfg = plugin.getEnchantsConfig().getEternalGrowth();
+        int maxLevel = cfg.getMaxLevel();
+        if (!rollProc("eternal_growth", level, maxLevel, cfg.getEnchantProc(), source)) {
+            return false;
+        }
+
+        if (blockPos == null || !isEternalStageFinalCrop(harvestedBlockId)) {
+            Debug.log("[EternalGrowth] source=" + source + " procResult=false reason=not_eternal_or_missing_block_pos blockId=" + harvestedBlockId);
+            return false;
+        }
+
+        Ref<EntityStore> ref = playerRef.getReference();
+        if (ref == null || !ref.isValid()) {
+            Debug.log("[EternalGrowth] source=" + source + " procResult=false reason=invalid_player_ref");
+            return false;
+        }
+
+        Store<EntityStore> store = ref.getStore();
+        EntityStore entityStore = store.getExternalData();
+        if (entityStore == null || entityStore.getWorld() == null) {
+            Debug.log("[EternalGrowth] source=" + source + " procResult=false reason=missing_world");
+            return false;
+        }
+
+        World world = entityStore.getWorld();
+        String beforeBlockId = "<unknown>";
+        if (world.getBlockType(blockPos.getX(), blockPos.getY(), blockPos.getZ()) != null) {
+            beforeBlockId = normalizeBlockId(world.getBlockType(blockPos.getX(), blockPos.getY(), blockPos.getZ()).getId());
+        }
+
+        if (!isEternalStage1Crop(beforeBlockId)) {
+            Debug.log("[EternalGrowth] source=" + source + " procResult=false reason=post_harvest_not_stage1 blockPos="
+                    + blockPos.getX() + "," + blockPos.getY() + "," + blockPos.getZ()
+                    + " beforeBlockId=" + beforeBlockId + " harvestedBlockId=" + harvestedBlockId);
+            return false;
+        }
+
+        String stage2BlockId = beforeBlockId.substring(0, beforeBlockId.length() - "_Stage1".length()) + "_Stage2";
+        boolean changed = trySetBlockById(world, blockPos, stage2BlockId);
+        String afterBlockId = "<unknown>";
+        if (world.getBlockType(blockPos.getX(), blockPos.getY(), blockPos.getZ()) != null) {
+            afterBlockId = normalizeBlockId(world.getBlockType(blockPos.getX(), blockPos.getY(), blockPos.getZ()).getId());
+        }
+
+        boolean advanced = changed && stage2BlockId.equals(afterBlockId);
+        Debug.log("[EternalGrowth] source=" + source
+                + " blockPos=" + blockPos.getX() + "," + blockPos.getY() + "," + blockPos.getZ()
+                + " beforeBlockId=" + beforeBlockId
+                + " afterBlockId=" + afterBlockId
+                + " procResult=" + advanced);
+
+        if (!advanced) {
+            return false;
+        }
+
+        String procMessage = MessageFormatter.format(cfg.getProcMessage(), Map.of(
+                "amount", "",
+                "currency", plugin.getTokensConfig().getCurrencyName(),
+                "enchant", "Eternal Growth",
+                "level", String.valueOf(level),
+                "crateId", "",
+                "extra", "",
+                "count", "1"
+        ));
+
+        Player player = store.getComponent(ref, Player.getComponentType());
+        if (batch != null) {
+            batch.eternalGrowthCount++;
+            batch.eternalGrowthProcCount++;
+        } else if (player != null && !procMessage.isBlank()) {
+            player.sendMessage(Message.raw(procMessage));
+        }
+        return true;
+    }
+
+    private boolean isEternalStageFinalCrop(String blockId) {
+        String normalized = normalizeBlockId(blockId);
+        return normalized != null
+                && normalized.contains("_Block_Eternal_State_Definitions_")
+                && normalized.endsWith("_StageFinal");
+    }
+
+    private boolean isEternalStage1Crop(String blockId) {
+        String normalized = normalizeBlockId(blockId);
+        return normalized != null
+                && normalized.contains("_Block_Eternal_State_Definitions_")
+                && normalized.endsWith("_Stage1");
+    }
+
+    private boolean trySetBlockById(World world, Vector3i pos, String blockId) {
+        for (String methodName : List.of("setBlockType", "setBlock", "setBlockId", "setBlockTypeById")) {
+            for (Method method : world.getClass().getMethods()) {
+                if (!method.getName().equals(methodName)) {
+                    continue;
+                }
+                Class<?>[] params = method.getParameterTypes();
+                try {
+                    if (params.length == 4
+                            && params[0] == int.class
+                            && params[1] == int.class
+                            && params[2] == int.class) {
+                        Object blockArg = convertBlockArg(params[3], blockId);
+                        if (blockArg != null) {
+                            method.invoke(world, pos.getX(), pos.getY(), pos.getZ(), blockArg);
+                            return true;
+                        }
+                    }
+                    if (params.length == 2
+                            && params[0] == Vector3i.class) {
+                        Object blockArg = convertBlockArg(params[1], blockId);
+                        if (blockArg != null) {
+                            method.invoke(world, pos, blockArg);
+                            return true;
+                        }
+                    }
+                } catch (Exception ignored) {
+                    // try next method signature
+                }
+            }
+        }
+
+        Debug.warn("[EternalGrowth] unable to set Stage2 block; no compatible world setBlock API found");
+        return false;
+    }
+
     public void sendBatchSummaryIfAny(Player player, PlayerRef playerRef, ProcBatch batch, String source) {
         if (player == null || batch == null) {
             return;
         }
-        if (batch.totalTokensAwarded <= 0 && batch.totalFortuneExtra <= 0 && batch.keyfinderByCrate.isEmpty()) {
+        if (batch.totalTokensAwarded <= 0 && batch.totalFortuneExtra <= 0 && batch.keyfinderByCrate.isEmpty()
+                && batch.eternalGrowthCount <= 0) {
             return;
         }
 
@@ -316,7 +450,8 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                     "enchant", "Token Finder",
                     "level", "",
                     "crateId", "",
-                    "extra", ""
+                    "extra", "",
+                    "count", ""
             ));
             if (!line.isBlank()) {
                 lines.add(line);
@@ -330,7 +465,8 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                     "enchant", "Fortune",
                     "level", "",
                     "crateId", "",
-                    "extra", String.valueOf(batch.totalFortuneExtra)
+                    "extra", String.valueOf(batch.totalFortuneExtra),
+                    "count", ""
             ));
             if (!line.isBlank()) {
                 lines.add(line);
@@ -348,7 +484,23 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                     "enchant", "Keyfinder",
                     "level", "",
                     "crateId", crateSummary,
-                    "extra", ""
+                    "extra", "",
+                    "count", ""
+            ));
+            if (!line.isBlank()) {
+                lines.add(line);
+            }
+        }
+
+        if (batch.eternalGrowthCount > 0) {
+            String line = MessageFormatter.format(plugin.getEnchantsConfig().getEternalGrowth().getProcMessage(), Map.of(
+                    "amount", "",
+                    "currency", plugin.getTokensConfig().getCurrencyName(),
+                    "enchant", "Eternal Growth",
+                    "level", "",
+                    "crateId", "",
+                    "extra", "",
+                    "count", String.valueOf(batch.eternalGrowthCount)
             ));
             if (!line.isBlank()) {
                 lines.add(line);
@@ -366,7 +518,8 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
                 + " cropsProcessed=" + batch.cropsProcessed
                 + " tokenTotal=" + batch.totalTokensAwarded
                 + " fortuneExtra=" + batch.totalFortuneExtra
-                + " keyfinderKeys=" + batch.keyfinderByCrate);
+                + " keyfinderKeys=" + batch.keyfinderByCrate
+                + " eternalGrowthCount=" + batch.eternalGrowthCount);
     }
 
     private EnchantsConfig.Crate chooseCrate(List<EnchantsConfig.Crate> crates) {
@@ -648,6 +801,31 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         return null;
     }
 
+
+    private Object convertBlockArg(Class<?> targetType, String blockId) {
+        if (targetType == String.class || targetType == CharSequence.class || targetType == Object.class) {
+            return blockId;
+        }
+        if (targetType.isAssignableFrom(String.class)) {
+            return blockId;
+        }
+        try {
+            Method ofMethod = targetType.getMethod("of", String.class);
+            return ofMethod.invoke(null, blockId);
+        } catch (Exception ignored) {
+        }
+        try {
+            Method fromIdMethod = targetType.getMethod("fromId", String.class);
+            return fromIdMethod.invoke(null, blockId);
+        } catch (Exception ignored) {
+        }
+        try {
+            return targetType.getConstructor(String.class).newInstance(blockId);
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
     @Override
     public Query<EntityStore> getQuery() {
         return Archetype.of(Player.getComponentType());
@@ -665,6 +843,8 @@ public class TokenFinderBreakBlockSystem extends EntityEventSystem<EntityStore, 
         public int totalFortuneExtra;
         public int fortuneProcCount;
         public int keyfinderProcCount;
+        public int eternalGrowthProcCount;
+        public int eternalGrowthCount;
         public int cropsProcessed;
         public final Map<String, Integer> fortuneByItem = new HashMap<>();
         public final Map<String, Integer> keyfinderByCrate = new HashMap<>();

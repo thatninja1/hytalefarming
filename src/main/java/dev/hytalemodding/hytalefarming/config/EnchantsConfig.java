@@ -16,6 +16,7 @@ public class EnchantsConfig {
     private TokenFinder tokenFinder = new TokenFinder();
     private Fortune fortune = new Fortune();
     private Keyfinder keyfinder = new Keyfinder();
+    private EternalGrowth eternalGrowth = new EternalGrowth();
 
     public static EnchantsConfig load(Path path) {
         try {
@@ -42,6 +43,10 @@ public class EnchantsConfig {
 
     public Keyfinder getKeyfinder() {
         return keyfinder == null ? new Keyfinder() : keyfinder;
+    }
+
+    public EternalGrowth getEternalGrowth() {
+        return eternalGrowth == null ? new EternalGrowth() : eternalGrowth;
     }
 
     public static class TokenFinder {
@@ -130,6 +135,32 @@ public class EnchantsConfig {
 
         public List<Crate> getCrates() {
             return crates == null ? List.of() : crates;
+        }
+    }
+
+    public static class EternalGrowth {
+        private int maxLevel = 5;
+        private int baseUpgradeCost = 30;
+        private int upgradeCostIncrease = 100;
+        private float enchantProc = 0.25f;
+        private String procMessage = "#AAFFAAEternal Growth! Advanced {count} crops";
+
+        public int getMaxLevel() {
+            return Math.max(1, maxLevel);
+        }
+
+        public int getUpgradeCost(int currentLevel) {
+            return Math.max(1, baseUpgradeCost) + (Math.max(0, currentLevel) * Math.max(0, upgradeCostIncrease));
+        }
+
+        public double getEnchantProc() {
+            return Math.max(0.0D, Math.min(1.0D, enchantProc));
+        }
+
+        public String getProcMessage() {
+            return procMessage == null || procMessage.isBlank()
+                    ? "{enchant} proc! {count}"
+                    : procMessage;
         }
     }
 

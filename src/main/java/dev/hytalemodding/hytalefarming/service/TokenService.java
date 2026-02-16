@@ -77,6 +77,11 @@ public class TokenService {
                 current -> enchantsConfig.getKeyfinder().getUpgradeCost(current));
     }
 
+    public synchronized boolean tryUpgradeEternalGrowth(UUID playerId, String playerName) {
+        return tryUpgradeEnchant(playerId, playerName, "eternal_growth", enchantsConfig.getEternalGrowth().getMaxLevel(),
+                current -> enchantsConfig.getEternalGrowth().getUpgradeCost(current));
+    }
+
     public synchronized void addTokensForProc(UUID playerId, String playerName, long amount) {
         addTokens(playerId, playerName, amount);
     }
